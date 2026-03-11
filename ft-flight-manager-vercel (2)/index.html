@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FT Flight Manager</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d2e;
+    --surface2: #242740;
+    --border: #2e3250;
+    --accent: #5b6ef5;
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --text: #e2e8f0;
+    --muted: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; gap: 32px;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; padding: 16px 0; white-space: nowrap; }
+  .logo-icon { background: linear-gradient(135deg,#5b6ef5,#7c3aed); border-radius: 10px; padding: 8px 10px; font-size: 20px; }
+  .logo-text { font-weight: 900; font-size: 17px; letter-spacing: -0.02em; }
+  .logo-sub { font-size: 11px; color: var(--muted); }
+  .tabs { display: flex; gap: 0; flex: 1; overflow-x: auto; }
+  .tab-btn {
+    padding: 18px 20px; background: none; border: none; cursor: pointer;
+    font-weight: 600; font-size: 14px; color: var(--muted);
+    border-bottom: 3px solid transparent; transition: all .2s;
+    display: flex; align-items: center; gap: 8px; white-space: nowrap;
+  }
+  .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+  .badge { background: var(--accent); color: #fff; border-radius: 20px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+  .badge.urgent { background: var(--red); animation: pulse 2s infinite; }
+
+  .statusbar {
+    background: var(--surface2); border-bottom: 1px solid var(--border);
+    padding: 10px 32px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    font-size: 13px;
+  }
+  .api-ok { color: var(--green); font-weight: 700; }
+  .auto-badge { background: rgba(16,185,129,.15); color: var(--green); padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .refresh-info { color: var(--muted); margin-left: auto; }
+
+  .main { max-width: 1280px; margin: 0 auto; padding: 28px 24px; }
+  .page { display: none; }
+  .page.active { display: flex; flex-direction: column; gap: 20px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .card-title { font-size: 16px; font-weight: 700; }
+
+  .drop-zone {
+    border: 2px dashed var(--border); border-radius: 14px; padding: 36px;
+    text-align: center; cursor: pointer; transition: all .2s;
+  }
+  .drop-zone:hover, .drop-zone.drag { border-color: var(--accent); background: rgba(91,110,245,.05); }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { padding: 11px 18px; text-align: left; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; background: var(--surface2); white-space: nowrap; }
+  td { padding: 13px 18px; border-top: 1px solid var(--border); font-size: 14px; vertical-align: middle; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .pill.monitoring { background: rgba(91,110,245,.15); color: #818cf8; }
+  .pill.alert      { background: rgba(239,68,68,.15);  color: #f87171; }
+  .pill.purchased  { background: rgba(16,185,129,.15); color: #34d399; }
+  .pill.searching  { background: rgba(245,158,11,.15); color: #fbbf24; }
+
+  .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 16px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; text-align: center; }
+  .kpi .num   { font-size: 28px; font-weight: 900; margin: 8px 0 4px; }
+  .kpi .label { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+
+  .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 14px; }
+  .form-group label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 6px; }
+  .form-group input, .form-group select {
+    width: 100%; padding: 10px 12px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); font-size: 14px;
+  }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent); }
+  select option { background: #1a1d2e; }
+
+  .flight-card {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 22px; display: flex; align-items: center; gap: 18px;
+    margin-bottom: 10px; transition: border-color .2s;
+  }
+  .flight-card:hover { border-color: var(--accent); }
+  .flight-card.cheap { border-color: var(--green); background: rgba(16,185,129,.05); }
+  .flight-price .price-big { font-size: 24px; font-weight: 900; }
+
+  .alert-card {
+    background: var(--surface2); border: 2px solid var(--border); border-radius: 14px;
+    padding: 20px; display: flex; align-items: center; gap: 16px; margin-bottom: 10px;
+  }
+  .alert-card.triggered { border-color: var(--red); background: rgba(239,68,68,.05); }
+  .progress-bar { background: var(--border); border-radius: 99px; height: 6px; overflow: hidden; margin-top: 8px; }
+  .progress-fill { height: 100%; border-radius: 99px; background: var(--accent); transition: width .5s; }
+
+  .btn { padding: 9px 18px; border-radius: 9px; border: none; cursor: pointer; font-weight: 700; font-size: 13px; transition: all .2s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #4a5ce0; }
+  .btn-success { background: var(--green); color: #fff; }
+  .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-sm { padding: 6px 13px; font-size: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: 700; transition: all .2s; }
+
+  #toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 20px; font-weight: 600; font-size: 14px;
+    transform: translateY(80px); opacity: 0; transition: all .3s;
+    max-width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+
+  .spinner { display: inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  .empty { text-align: center; padding: 48px; color: var(--muted); }
+  .empty .eicon { font-size: 48px; margin-bottom: 12px; }
+  .days-soon { color: var(--red); font-weight: 700; }
+  .days-ok   { color: var(--muted); }
+
+  .section-title { font-size: 14px; font-weight: 800; margin: 8px 0 12px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">✈️</div>
+    <div>
+      <div class="logo-text">FT Flight Manager</div>
+      <div class="logo-sub">Gestão de Passagens Corporativas</div>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('calendario')">📅 Calendário <span class="badge" id="badge-cal">16</span></button>
+    <button class="tab-btn" onclick="switchTab('busca')">✈️ Buscar Passagens</button>
+    <button class="tab-btn" onclick="switchTab('alertas')">🔔 Alertas <span class="badge" id="badge-alert">0</span></button>
+    <button class="tab-btn" onclick="switchTab('compras')">🛒 Compras <span class="badge" id="badge-compras">0</span></button>
+  </div>
+</div>
+
+<!-- PROXY BANNER -->
+<div id="proxyBanner" style="display:none;background:rgba(239,68,68,.12);border-bottom:1px solid rgba(239,68,68,.3);padding:14px 32px;align-items:center;gap:16px;flex-wrap:wrap;">
+  <span style="font-size:18px;">⚠️</span>
+  <div style="flex:1;">
+    <strong style="color:#f87171;">API não respondeu</strong>
+    <span style="color:var(--muted);font-size:13px;margin-left:8px;">— Verifique a variável de ambiente SERP_KEY na Vercel:</span>
+    <ol style="margin:6px 0 0 18px;font-size:13px;color:var(--muted);line-height:1.8;">
+      <li>Acesse <a href="https://vercel.com/dashboard" target="_blank" style="color:var(--accent);">vercel.com/dashboard</a> e abra o projeto</li>
+      <li>Va em <strong>Settings → Environment Variables</strong></li>
+      <li>Adicione: <code style="background:var(--surface2);padding:1px 6px;border-radius:4px;">SERP_KEY</code> com sua chave SerpAPI</li>
+      <li>Clique <strong>Redeploy</strong> e depois <button onclick="checkProxy().then(()=>document.getElementById('proxyBanner').style.display='none')" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:700;">Testar novamente</button></li>
+    </ol>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div class="statusbar">
+  <span id="proxyStatus" style="font-weight:700;color:var(--muted);">🔄 Verificando API…</span>
+  <span style="color:var(--muted);">|</span>
+  <span style="color:var(--muted);">Origem padrão: <strong style="color:var(--text);">POA — Salgado Filho, Porto Alegre</strong></span>
+  <span style="color:var(--muted);">|</span>
+  <span class="auto-badge">🔄 Auto-refresh a cada 30 min</span>
+  <span class="refresh-info" id="lastRefresh">Aguardando primeira atualização…</span>
+  <button class="btn btn-ghost" style="padding:6px 14px;font-size:12px;" onclick="refreshAllAlerts()">🔄 Atualizar Agora</button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- ══ CALENDÁRIO ══ -->
+  <div class="page active" id="page-calendario">
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📥 Adicionar Eventos via XLSX / CSV</span>
+        <button class="btn btn-ghost" style="font-size:13px;padding:7px 14px;" onclick="downloadTemplate()">⬇️ Baixar Modelo</button>
+      </div>
+      <div class="drop-zone" id="dropZone"
+        onclick="document.getElementById('fileInput').click()"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="handleDrop(event)">
+        <div style="font-size:38px;margin-bottom:8px;">📂</div>
+        <p style="font-weight:600;color:var(--text);">Arraste o arquivo XLSX/CSV ou clique para selecionar</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:4px;">Colunas: <code>evento, data</code> — eventos "FuelTech &amp; Chimarrão" e "Velopark" são ignorados automaticamente</p>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFile(this.files[0])">
+      <div id="importMsg" style="margin-top:10px;display:none;"></div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:18px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span class="card-title">📅 Eventos 2026 — FuelTech</span>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <input type="text" id="searchEvents" placeholder="🔍 Filtrar…" onkeyup="renderCalendar()"
+            style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-size:13px;width:200px;">
+          <button class="btn btn-primary" style="font-size:13px;padding:8px 16px;" onclick="goSearchAll()">✈️ Buscar Todos</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Evento</th><th>Início</th><th>Fim</th><th>Dias p/ evento</th><th>Destino</th><th>Aeroporto</th><th>Status</th><th>Ações</th></tr>
+          </thead>
+          <tbody id="calBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ BUSCA ══ -->
+  <div class="page" id="page-busca">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:20px;">✈️ Buscar Passagens — POA → Destino</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Evento (opcional)</label>
+          <select id="selEvent" onchange="fillFromEvent()">
+            <option value="">— Selecione —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Destino (IATA)</label>
+          <select id="selDest">
+            <option value="VCP">VCP — Campinas, SP</option>
+            <option value="GRU">GRU — Guarulhos, SP</option>
+            <option value="CGH">CGH — Congonhas, SP</option>
+            <option value="FLN">FLN — Florianópolis, SC</option>
+            <option value="BSB">BSB — Brasília, DF</option>
+            <option value="GIG">GIG — Galeão, RJ</option>
+            <option value="SDU">SDU — Santos Dumont, RJ</option>
+            <option value="FOR">FOR — Fortaleza, CE</option>
+            <option value="SSA">SSA — Salvador, BA</option>
+            <option value="REC">REC — Recife, PE</option>
+            <option value="CWB">CWB — Curitiba, PR</option>
+            <option value="CNF">CNF — Confins, MG</option>
+            <option value="POA">POA — Porto Alegre, RS</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Data de Ida</label>
+          <input type="date" id="selDate">
+        </div>
+        <div class="form-group">
+          <label>Data de Volta</label>
+          <input type="date" id="selReturn">
+        </div>
+        <div class="form-group">
+          <label>Preço alvo / pessoa (R$)</label>
+          <input type="number" id="targetPrice" placeholder="Ex: 600">
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;">
+          <button class="btn btn-primary" style="width:100%;padding:11px;" onclick="searchFlights()">🔍 Buscar Voos</button>
+        </div>
+      </div>
+    </div>
+    <div id="flightResults"></div>
+  </div>
+
+  <!-- ══ ALERTAS ══ -->
+  <div class="page" id="page-alertas">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div style="font-size:20px;font-weight:800;">🔔 Alertas de Preço</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:3px;" id="alertsLastUpdate">Aguardando atualização…</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <span class="auto-badge">🔄 Auto 30min</span>
+        <button class="btn btn-ghost" style="font-size:13px;" onclick="refreshAllAlerts()">🔄 Atualizar Agora</button>
+      </div>
+    </div>
+    <div id="alertsTriggered"></div>
+    <div id="alertsWatching"></div>
+  </div>
+
+  <!-- ══ COMPRAS ══ -->
+  <div class="page" id="page-compras">
+    <div class="grid-4" id="kpiGrid"></div>
+    <div id="buyQueue"></div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:18px 24px;border-bottom:1px solid var(--border);font-weight:700;">📋 Histórico de Compras</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Evento</th><th>Cia</th><th>Rota</th><th>Data Voo</th><th>Valor/pax</th><th>Qtd</th><th>Total</th><th>Registrado em</th><th>Status</th></tr></thead>
+          <tbody id="purchaseBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<div id="toast"></div>
+
+<script>
+// ─── CHAVE SERPAPI ────────────────────────────────────────────────────────────
+// Na Vercel, a chave fica segura como variável de ambiente no servidor
+// O frontend chama /api/flights (sem expor a chave)
+const PROXY_BASE = '';
+
+// ─── EVENTOS PRÉ-CARREGADOS (do XLSX 2026) ────────────────────────────────────
+// Filtrados: sem "FuelTech & Chimarrão" e sem "Autódromo Velopark" regulares
+let events = [
+  { id:'e1',  name:'SPID Cup Pré-Stage',          city:'Itatiba / Campinas, SP',          airport:'VCP', startDate:'2026-02-14', endDate:'2026-02-16', status:'monitoring' },
+  { id:'e2',  name:'Fórmula Truck 1ª Etapa',       city:'São Paulo, SP',                   airport:'CGH', startDate:'2026-02-16', endDate:'2026-02-16', status:'monitoring' },
+  { id:'e3',  name:'1ª Etapa SPID CUP',            city:'Itatiba / Campinas, SP',          airport:'VCP', startDate:'2026-03-13', endDate:'2026-03-15', status:'monitoring' },
+  { id:'e4',  name:'SPID Cup 2ª Etapa',            city:'Itatiba / Campinas, SP',          airport:'VCP', startDate:'2026-04-04', endDate:'2026-04-06', status:'monitoring' },
+  { id:'e5',  name:'Old School Day',               city:'Santa Cruz do Sul, RS',           airport:'POA', startDate:'2026-04-05', endDate:'2026-04-05', status:'monitoring' },
+  { id:'e6',  name:'Formula Truck 3ª Etapa',       city:'Guaporé, RS',                     airport:'POA', startDate:'2026-04-13', endDate:'2026-04-13', status:'monitoring' },
+  { id:'e7',  name:'GUMPS DRAG RACE',              city:'Itatiba / Campinas, SP',          airport:'VCP', startDate:'2026-04-18', endDate:'2026-04-19', status:'monitoring' },
+  { id:'e8',  name:'AUTOMEC',                      city:'São Paulo, SP',                   airport:'CGH', startDate:'2026-04-22', endDate:'2026-04-24', status:'monitoring' },
+  { id:'e9',  name:'VP Series 1ª Etapa + AUTOMEC', city:'São Paulo, SP',                   airport:'CGH', startDate:'2026-04-25', endDate:'2026-04-27', status:'monitoring' },
+  { id:'e10', name:'2ª Etapa SPID CUP',            city:'Itatiba / Campinas, SP',          airport:'VCP', startDate:'2026-05-22', endDate:'2026-05-24', status:'monitoring' },
+  { id:'e11', name:'FenaJeep',                     city:'Brusque / Florianópolis, SC',     airport:'FLN', startDate:'2026-06-03', endDate:'2026-06-07', status:'monitoring' },
+  { id:'e12', name:'SPID FEST',                    city:'Itatiba / Campinas, SP',          airport:'VCP', startDate:'2026-07-02', endDate:'2026-07-07', status:'monitoring' },
+  { id:'e13', name:'3ª Etapa SPID CUP',            city:'Itatiba / Campinas, SP',          airport:'VCP', startDate:'2026-08-28', endDate:'2026-08-29', status:'monitoring' },
+  { id:'e14', name:'4ª Etapa SPID CUP',            city:'Itatiba / Campinas, SP',          airport:'VCP', startDate:'2026-10-09', endDate:'2026-10-11', status:'monitoring' },
+  { id:'e15', name:'Super Final SPID',             city:'Itatiba / Campinas, SP',          airport:'VCP', startDate:'2026-11-22', endDate:'2026-11-22', status:'monitoring' },
+  { id:'e16', name:'Festival Velopark',            city:'Nova Santa Rita / Porto Alegre, RS', airport:'POA', startDate:'2026-12-04', endDate:'2026-12-06', status:'monitoring' },
+];
+
+let alerts    = JSON.parse(localStorage.getItem('ft_alerts')    || '[]');
+let purchases = JSON.parse(localStorage.getItem('ft_purchases') || '[]');
+let autoTimer = null;
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.onload = async () => {
+  renderCalendar();
+  populateEventSelect();
+  renderAlerts();
+  renderCompras();
+  updateBadges();
+  await checkProxy();
+};
+
+async function checkProxy() {
+  try {
+    const r = await fetch(`/api/flights?engine=google_flights&departure_id=POA&arrival_id=VCP&outbound_date=2026-04-01&type=2&currency=BRL&hl=pt&gl=br`, { signal: AbortSignal.timeout(8000) });
+    if (r.ok || r.status === 200) {
+      document.getElementById('proxyStatus').innerHTML = '🟢 Proxy ativo — SerpAPI conectada';
+      document.getElementById('proxyStatus').style.color = 'var(--green)';
+      startAutoRefresh();
+    } else { showProxyWarning(); }
+  } catch {
+    showProxyWarning();
+  }
+}
+
+function showProxyWarning() {
+  document.getElementById('proxyStatus').innerHTML = '🔴 Proxy offline';
+  document.getElementById('proxyStatus').style.color = 'var(--red)';
+  // Mostra banner
+  document.getElementById('proxyBanner').style.display = 'flex';
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+const TAB_KEYS = ['calendario','busca','alertas','compras'];
+function switchTab(tab) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + tab).classList.add('active');
+  document.querySelectorAll('.tab-btn')[TAB_KEYS.indexOf(tab)].classList.add('active');
+  if (tab === 'alertas') renderAlerts();
+  if (tab === 'compras') renderCompras();
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+const fmtBRL  = v  => 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtDate = d  => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'short', year:'numeric'});
+const daysUntil = d => Math.ceil((new Date(d + 'T12:00:00') - new Date()) / 86400000);
+const save = () => {
+  localStorage.setItem('ft_alerts',    JSON.stringify(alerts));
+  localStorage.setItem('ft_purchases', JSON.stringify(purchases));
+};
+
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  const colors = { ok:'var(--green)', warn:'var(--yellow)', err:'var(--red)' };
+  el.textContent = msg;
+  el.style.borderColor = colors[type] || colors.ok;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ─── CALENDÁRIO ───────────────────────────────────────────────────────────────
+function renderCalendar() {
+  const filter = (document.getElementById('searchEvents').value || '').toLowerCase();
+  const list   = events
+    .filter(e => e.name.toLowerCase().includes(filter) || e.city.toLowerCase().includes(filter))
+    .sort((a,b) => a.startDate.localeCompare(b.startDate));
+
+  document.getElementById('badge-cal').textContent = events.length;
+
+  const stLabel = { monitoring:'Monitorando', alert:'⚡ Alerta!', purchased:'✅ Comprado', searching:'🔍 Buscando' };
+  const body = document.getElementById('calBody');
+
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="eicon">📭</div><p>Nenhum evento</p></div></td></tr>';
+    return;
+  }
+
+  body.innerHTML = list.map(ev => {
+    const days = daysUntil(ev.startDate);
+    const dc   = days <= 30 ? 'days-soon' : 'days-ok';
+    const multiday = ev.startDate !== ev.endDate;
+    return `<tr>
+      <td><strong>${ev.name}</strong></td>
+      <td>${fmtDate(ev.startDate)}</td>
+      <td>${multiday ? fmtDate(ev.endDate) : '—'}</td>
+      <td><span class="${dc}">em ${days}d</span></td>
+      <td style="color:var(--muted);font-size:13px;">${ev.city}</td>
+      <td><code style="background:var(--surface2);padding:2px 8px;border-radius:6px;font-size:12px;">${ev.airport}</code></td>
+      <td><span class="pill ${ev.status}">${stLabel[ev.status]||'—'}</span></td>
+      <td style="white-space:nowrap;">
+        <button class="btn-sm btn-primary" onclick="goSearch('${ev.id}')" style="background:var(--accent);color:#fff;">✈️ Buscar</button>
+        <button class="btn-sm btn-ghost" onclick="removeEvent('${ev.id}')" style="margin-left:4px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function removeEvent(id) {
+  if (!confirm('Remover este evento?')) return;
+  events = events.filter(e => e.id !== id);
+  renderCalendar();
+  populateEventSelect();
+  toast('🗑️ Evento removido');
+}
+
+function goSearch(id) {
+  const ev = events.find(e => e.id === id);
+  if (ev) {
+    document.getElementById('selEvent').value  = id;
+    document.getElementById('selDest').value   = ev.airport;
+    document.getElementById('selDate').value   = ev.startDate;
+    document.getElementById('selReturn').value = ev.endDate;
+  }
+  switchTab('busca');
+}
+
+function goSearchAll() {
+  toast('🔍 Iniciando busca para todos os eventos…');
+  events.forEach((ev, i) => setTimeout(() => { ev.status = 'searching'; renderCalendar(); }, i * 80));
+  setTimeout(() => switchTab('busca'), 400);
+}
+
+// ─── IMPORT XLSX ──────────────────────────────────────────────────────────────
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag');
+  handleFile(e.dataTransfer.files[0]);
+}
+
+const EXCLUDED_TERMS = ['fueltech & chimarrão','fueltech &amp; chimarrão','autódromo velopark'];
+const SKIP_TERMS     = ['feriado','páscoa','tiradentes','valentine','dia mundial','dia do amigo','dia da mentira','nossa senhora','aniversário da fueltech'];
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb   = XLSX.read(e.target.result, {type:'binary'});
+      const imported = [];
+
+      wb.SheetNames.forEach(sname => {
+        const ws   = wb.Sheets[sname];
+        const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+        data.forEach(row => {
+          const cells = row.map(c => String(c).trim()).filter(Boolean);
+          if (cells.length < 2) return;
+          const dateCell = cells.find(c => /\d{4}-\d{2}-\d{2}/.test(c) || /\d{2}\/\d{2}\/(\d{4}|\d{2})/.test(c));
+          if (!dateCell) return;
+          let dateStr = dateCell;
+          if (/\d{2}\/\d{2}\/\d{4}/.test(dateCell)) {
+            const [d,m,y] = dateCell.split('/');
+            dateStr = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+          } else if (/\d{2}\/\d{2}\/\d{2}/.test(dateCell)) {
+            const [d,m,y] = dateCell.split('/');
+            dateStr = `20${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+          }
+          const nameCell = cells.find(c => c !== dateCell && c.length > 3 && !/^\d+$/.test(c));
+          if (!nameCell) return;
+          const nl = nameCell.toLowerCase();
+          if (EXCLUDED_TERMS.some(t => nl.includes(t))) return;
+          if (SKIP_TERMS.some(t => nl.includes(t))) return;
+          imported.push({
+            id: 'imp_' + Date.now() + '_' + imported.length,
+            name: nameCell, city:'A definir', airport:'GRU',
+            startDate: dateStr, endDate: dateStr, status:'monitoring'
+          });
+        });
+      });
+
+      if (imported.length) {
+        events = [...events, ...imported];
+        renderCalendar();
+        populateEventSelect();
+        showImportMsg(`✅ ${imported.length} evento(s) importado(s)!`, 'ok');
+        toast(`✅ ${imported.length} eventos importados`);
+      } else {
+        showImportMsg('ℹ️ Nenhum evento novo detectado. Verifique as colunas "evento" e "data".', 'warn');
+      }
+    } catch(err) {
+      showImportMsg('❌ Erro ao processar: ' + err.message, 'err');
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function showImportMsg(msg, type) {
+  const el = document.getElementById('importMsg');
+  const c  = { ok:'var(--green)', warn:'var(--yellow)', err:'var(--red)' };
+  const bg = { ok:'rgba(16,185,129,.1)', warn:'rgba(245,158,11,.1)', err:'rgba(239,68,68,.1)' };
+  el.innerHTML = `<div style="padding:12px 16px;border-radius:10px;background:${bg[type]};border:1px solid ${c[type]};color:${c[type]};font-weight:600;font-size:14px;">${msg}</div>`;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 5000);
+}
+
+function downloadTemplate() {
+  const csv = 'evento,data\n1ª Etapa SPID CUP (Itatiba/SP),2026-03-13\nFenaJeep (Brusque/SC),2026-06-03\n';
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})), download:'modelo_eventos_ft.csv' });
+  a.click();
+}
+
+function populateEventSelect() {
+  const sel = document.getElementById('selEvent');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Selecione um evento —</option>' +
+    [...events].sort((a,b) => a.startDate.localeCompare(b.startDate))
+      .map(e => `<option value="${e.id}">${e.name} (${fmtDate(e.startDate)})</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+function fillFromEvent() {
+  const id = document.getElementById('selEvent').value;
+  const ev = events.find(e => e.id === id);
+  if (!ev) return;
+  document.getElementById('selDest').value   = ev.airport;
+  document.getElementById('selDate').value   = ev.startDate;
+  document.getElementById('selReturn').value = ev.endDate;
+}
+
+// ─── SERP API — BUSCA DE VOOS ─────────────────────────────────────────────────
+async function searchFlights() {
+  const dest     = document.getElementById('selDest').value;
+  const date     = document.getElementById('selDate').value;
+  const retDate  = document.getElementById('selReturn').value;
+  const target   = parseFloat(document.getElementById('targetPrice').value) || null;
+  const eventId  = document.getElementById('selEvent').value;
+
+  if (!date) { toast('⚠️ Selecione a data de ida', 'warn'); return; }
+
+  const el = document.getElementById('flightResults');
+  el.innerHTML = `<div class="card" style="text-align:center;padding:52px;">
+    <div class="spinner" style="font-size:40px;">✈️</div>
+    <p style="margin-top:16px;font-weight:600;">Consultando Google Flights via SerpAPI…</p>
+    <p style="font-size:13px;color:var(--muted);margin-top:4px;">POA → ${dest} · ${date}</p>
+  </div>`;
+
+  try {
+    const isRound = retDate && retDate > date;
+    const params  = new URLSearchParams({
+      engine: 'google_flights',
+      departure_id: 'POA',
+      arrival_id:   dest,
+      outbound_date: date,
+      currency: 'BRL', hl: 'pt', gl: 'br',
+      type: isRound ? '1' : '2',
+      
+    });
+    if (isRound) params.set('return_date', retDate);
+
+    const resp = await fetch(`/api/flights?${params}`);
+    const data = await resp.json();
+
+    if (data.error) throw new Error(data.error);
+
+    const results       = [...(data.best_flights||[]), ...(data.other_flights||[])];
+    const gFlightsUrl   = data.search_metadata?.google_flights_url || '';
+    // Extrai o parâmetro tfs da URL base para montar os links de compra
+    const tfsMatch      = gFlightsUrl.match(/[?&]tfs=([^&]+)/);
+    const baseTfs       = tfsMatch ? tfsMatch[1] : '';
+
+    if (!results.length) {
+      el.innerHTML = `<div class="card"><div class="empty"><div class="eicon">🔍</div><p>Nenhum voo encontrado para essa rota/data.<br><small>Tente datas diferentes ou aeroporto alternativo.</small></p></div></div>`;
+      return;
+    }
+
+    // Atualiza status do evento
+    if (eventId) {
+      const ev = events.find(e => e.id === eventId);
+      if (ev && ev.status === 'searching') ev.status = 'monitoring';
+      renderCalendar();
+    }
+
+    renderFlightResults(results, target, dest, date, eventId, baseTfs, gFlightsUrl);
+
+  } catch(err) {
+    el.innerHTML = `<div class="card"><div class="empty"><div class="eicon">❌</div>
+      <p style="color:var(--red);font-weight:600;">Erro: ${err.message}</p>
+      <p style="font-size:13px;color:var(--muted);margin-top:8px;">Verifique a conexão com a internet.</p>
+    </div></div>`;
+    toast('❌ ' + err.message, 'err');
+  }
+}
+
+const AIRLINE_EMOJI = { 'LATAM':'🔴', 'Gol':'🟠', 'GOL':'🟠', 'Azul':'🔵' };
+
+function buildBookingUrl(bookingToken, baseTfs) {
+  if (bookingToken && baseTfs) {
+    return `https://www.google.com/travel/flights?hl=pt&gl=br&curr=BRL&tfs=${baseTfs}&selectedoffer=${encodeURIComponent(bookingToken)}`;
+  }
+  if (bookingToken) {
+    return `https://www.google.com/travel/flights?hl=pt&gl=br&curr=BRL&selectedoffer=${encodeURIComponent(bookingToken)}`;
+  }
+  return null;
+}
+
+function renderFlightResults(results, target, dest, date, eventId, baseTfs, gFlightsUrl) {
+  const el = document.getElementById('flightResults');
+
+  const cards = results.slice(0, 12).map((f, idx) => {
+    const price       = f.price || 0;
+    const flights     = f.flights || [];
+    const airline     = flights[0]?.airline || '—';
+    const flightNums  = flights.map(fl => fl.flight_number).filter(Boolean).join(' + ');
+    const airlineLogo = flights[0]?.airline_logo || f.airline_logo || '';
+    const dep         = flights[0]?.departure_airport?.time?.slice(11) || '—';
+    const depDate     = flights[0]?.departure_airport?.time?.slice(0,10) || date;
+    const arr         = flights[flights.length-1]?.arrival_airport?.time?.slice(11) || '—';
+    const arrDate     = flights[flights.length-1]?.arrival_airport?.time?.slice(0,10) || date;
+    const dur         = f.total_duration ? `${Math.floor(f.total_duration/60)}h${String(f.total_duration%60).padStart(2,'0')}m` : '—';
+    const stops       = (f.layovers||[]).length;
+    const cheap       = target && price > 0 && price <= target;
+    const emoji       = AIRLINE_EMOJI[airline] || '✈️';
+    const bookingUrl  = buildBookingUrl(f.booking_token, baseTfs);
+    const airplane    = flights[0]?.airplane || '';
+    const layoverInfo = (f.layovers||[]).map(l => l.name || l.id).join(', ');
+    const isOvernight = arrDate > depDate;
+    const bestBadge   = idx === 0
+      ? `<span style="background:linear-gradient(135deg,#5b6ef5,#7c3aed);color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;margin-left:6px;">⭐ Melhor opção</span>`
+      : '';
+
+    return `<div class="flight-card ${cheap?'cheap':''}" style="flex-wrap:wrap;gap:14px;align-items:center;">
+
+      <!-- Logo + Cia -->
+      <div style="display:flex;align-items:center;gap:10px;min-width:130px;">
+        ${airlineLogo
+          ? `<img src="${airlineLogo}" style="width:38px;height:38px;object-fit:contain;border-radius:8px;background:#fff;padding:3px;" onerror="this.style.display='none'">`
+          : `<span style="font-size:26px;">${emoji}</span>`}
+        <div>
+          <div style="font-weight:700;font-size:14px;line-height:1.3;">${airline}${bestBadge}</div>
+          ${flightNums ? `<div style="font-size:11px;color:var(--muted);font-family:monospace;">${flightNums}</div>` : ''}
+          ${airplane   ? `<div style="font-size:11px;color:var(--muted);">${airplane}</div>` : ''}
+        </div>
+      </div>
+
+      <!-- Horários visuais -->
+      <div style="flex:1;min-width:180px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="text-align:center;">
+            <div style="font-size:22px;font-weight:800;letter-spacing:-1px;">${dep}</div>
+            <div style="font-size:11px;color:var(--muted);">POA</div>
+          </div>
+          <div style="flex:1;text-align:center;">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:3px;">${dur}</div>
+            <div style="height:1px;background:var(--border);position:relative;">
+              <span style="position:absolute;top:-5px;left:50%;transform:translateX(-50%);font-size:10px;">✈</span>
+              <span style="position:absolute;top:-4px;right:-1px;width:8px;height:8px;border-radius:50%;background:var(--border);display:block;"></span>
+            </div>
+            <div style="font-size:11px;margin-top:3px;color:${stops===0?'var(--green)':'var(--yellow)'};">${stops===0?'✓ Direto':stops+' escala'+(stops>1?'s':'')}</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:22px;font-weight:800;letter-spacing:-1px;">${arr}${isOvernight?'<sup style="font-size:9px;color:var(--yellow);vertical-align:super;">+1</sup>':''}</div>
+            <div style="font-size:11px;color:var(--muted);">${dest}</div>
+          </div>
+        </div>
+        ${layoverInfo ? `<div style="font-size:11px;color:var(--muted);margin-top:5px;">🔄 ${layoverInfo}</div>` : ''}
+        ${cheap ? `<div style="margin-top:6px;"><span class="pill purchased">✅ Dentro do orçamento!</span></div>` : ''}
+      </div>
+
+      <!-- Preço -->
+      <div style="text-align:right;min-width:110px;">
+        <div style="font-size:23px;font-weight:900;color:${cheap?'var(--green)':'var(--text)'};">${price ? fmtBRL(price) : '—'}</div>
+        <div style="font-size:11px;color:var(--muted);">por pessoa</div>
+        ${target && price ? `<div style="font-size:11px;font-weight:600;color:${cheap?'var(--green)':'var(--muted)'};">${cheap ? `↓ ${fmtBRL(target-price)} abaixo` : `↑ ${fmtBRL(price-target)} acima`}</div>` : ''}
+      </div>
+
+      <!-- Ações -->
+      <div style="display:flex;flex-direction:column;gap:7px;min-width:148px;">
+        <a href="${bookingUrl || gFlightsUrl || 'https://www.google.com/travel/flights'}"
+           target="_blank" rel="noopener"
+           style="display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 14px;
+                  background:var(--green);color:#fff;border-radius:9px;font-weight:700;font-size:13px;
+                  text-decoration:none;transition:opacity .15s;"
+           onmouseover="this.style.opacity='.82'" onmouseout="this.style.opacity='1'">
+          🛒 Comprar agora
+        </a>
+        ${price ? `<button class="btn btn-primary" style="font-size:12px;padding:7px 10px;"
+            onclick="createAlert('${airline.replace(/'/g,'`')}','${dest}','${depDate}','${price}','${target||price}','${eventId||''}')">
+            🔔 Criar Alerta
+          </button>` : ''}
+      </div>
+
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div style="font-weight:700;font-size:16px;">POA → ${dest} · ${fmtDate(date)}</div>
+        <div style="font-size:13px;color:var(--muted);">${results.length} voos encontrados</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        ${target ? `<div style="background:rgba(91,110,245,.12);border:1px solid var(--border);border-radius:10px;padding:8px 16px;font-size:13px;">🎯 Alvo: <strong>${fmtBRL(target)}</strong></div>` : ''}
+        ${gFlightsUrl ? `<a href="${gFlightsUrl}" target="_blank" rel="noopener"
+            style="display:flex;align-items:center;gap:6px;padding:8px 16px;background:var(--surface2);
+                   border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;
+                   font-weight:600;text-decoration:none;">
+            🔗 Ver todos no Google Flights
+          </a>` : ''}
+      </div>
+    </div>
+    ${cards}
+  </div>`;
+}
+
+// ─── ALERTAS ──────────────────────────────────────────────────────────────────
+function createAlert(airline, airport, date, currentPrice, targetPrice, eventId) {
+  const ev = events.find(e => e.id === eventId);
+  const a  = {
+    id: 'a_' + Date.now(),
+    eventId, eventName: ev?.name || 'Evento sem nome',
+    airline, airport, date,
+    currentPrice: parseFloat(currentPrice),
+    targetPrice:  parseFloat(targetPrice),
+    triggered:    parseFloat(currentPrice) <= parseFloat(targetPrice),
+    createdAt:    new Date().toISOString(),
+    lastChecked:  new Date().toISOString(),
+  };
+  alerts.push(a);
+  if (ev) ev.status = a.triggered ? 'alert' : 'monitoring';
+  save();
+  renderCalendar();
+  renderAlerts();
+  updateBadges();
+  toast(`🔔 Alerta criado: ${airline} POA→${airport}`);
+}
+
+function renderAlerts() {
+  const triggered = alerts.filter(a => a.triggered);
+  const watching  = alerts.filter(a => !a.triggered);
+
+  // Triggered
+  const tEl = document.getElementById('alertsTriggered');
+  tEl.innerHTML = triggered.length
+    ? `<div class="section-title" style="color:var(--red);">⚡ ALERTAS DISPARADOS — Comprar Agora! (${triggered.length})</div>
+      ${triggered.map(a => `
+        <div class="alert-card triggered">
+          <div style="background:rgba(239,68,68,.15);border-radius:12px;padding:12px 16px;text-align:center;min-width:95px;">
+            <div style="font-size:20px;font-weight:900;color:var(--red);">${fmtBRL(a.currentPrice)}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px;">preço atual</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-weight:700;">${a.eventName}</div>
+            <div style="font-size:13px;color:var(--muted);">${a.airline} · POA→${a.airport} · ${fmtDate(a.date)}</div>
+            <div style="font-size:13px;color:var(--green);font-weight:600;margin-top:3px;">
+              💰 ${fmtBRL(a.targetPrice - a.currentPrice)} abaixo do alvo · Verificado: ${new Date(a.lastChecked).toLocaleTimeString('pt-BR')}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button class="btn btn-success" onclick="markPurchased('${a.id}')">🛒 Comprar</button>
+            <button class="btn btn-ghost" onclick="removeAlert('${a.id}')" style="padding:8px 10px;">🗑️</button>
+          </div>
+        </div>`).join('')}`
+    : '';
+
+  // Watching
+  const wEl = document.getElementById('alertsWatching');
+  if (watching.length) {
+    wEl.innerHTML = `<div class="section-title" style="color:var(--muted);">👀 Monitorando (${watching.length})</div>
+      ${watching.map(a => {
+        const pct = Math.min(100, Math.round((a.targetPrice / a.currentPrice) * 100));
+        return `<div class="alert-card">
+          <div style="flex:1;">
+            <div style="font-weight:600;">${a.eventName} · <span style="color:var(--muted);">${a.airline}</span></div>
+            <div style="font-size:13px;color:var(--muted);">POA→${a.airport} · ${fmtDate(a.date)} · Checado: ${new Date(a.lastChecked).toLocaleTimeString('pt-BR')}</div>
+            <div style="margin-top:10px;">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+                <span>Atual: <strong>${fmtBRL(a.currentPrice)}</strong></span>
+                <span>Alvo: <strong style="color:var(--accent);">${fmtBRL(a.targetPrice)}</strong></span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px;">Faltam ${fmtBRL(a.currentPrice - a.targetPrice)} para disparar</div>
+            </div>
+          </div>
+          <button class="btn btn-ghost" onclick="removeAlert('${a.id}')" style="padding:8px 10px;flex-shrink:0;">🗑️</button>
+        </div>`;
+      }).join('')}`;
+  } else if (!triggered.length) {
+    wEl.innerHTML = `<div class="card"><div class="empty"><div class="eicon">🔕</div><p>Nenhum alerta configurado.<br>Busque passagens e clique em <strong>🔔 Criar Alerta</strong>.</p></div></div>`;
+  } else {
+    wEl.innerHTML = '';
+  }
+
+  const ts = document.getElementById('alertsLastUpdate');
+  if (ts) ts.textContent = `Última verificação: ${new Date().toLocaleTimeString('pt-BR')}`;
+  const lr = document.getElementById('lastRefresh');
+  if (lr) lr.textContent = `Última atualização: ${new Date().toLocaleTimeString('pt-BR')}`;
+  updateBadges();
+}
+
+function removeAlert(id) {
+  alerts = alerts.filter(a => a.id !== id);
+  save();
+  renderAlerts();
+  updateBadges();
+}
+
+// ─── AUTO-REFRESH SERPAPI ─────────────────────────────────────────────────────
+async function refreshAllAlerts() {
+  if (!alerts.length) { toast('ℹ️ Nenhum alerta para atualizar', 'warn'); return; }
+  toast('🔄 Atualizando preços via SerpAPI…');
+
+  for (const a of alerts) {
+    try {
+      const params = new URLSearchParams({
+        engine: 'google_flights',
+        departure_id: 'POA',
+        arrival_id:   a.airport,
+        outbound_date: a.date,
+        currency: 'BRL', hl: 'pt', gl: 'br', type: '2',
+        
+      });
+      const resp = await fetch(`/api/flights?${params}`);
+      const data = await resp.json();
+      const all  = [...(data.best_flights||[]), ...(data.other_flights||[])];
+      // Tenta achar a mesma cia; senão pega o mais barato
+      const match = all.find(f => (f.flights||[])[0]?.airline?.includes(a.airline)) || all[0];
+      if (match?.price) {
+        const oldPrice     = a.currentPrice;
+        a.currentPrice     = match.price;
+        a.triggered        = match.price <= a.targetPrice;
+        a.lastChecked      = new Date().toISOString();
+        // Se disparou agora, atualiza evento
+        if (a.triggered && !a._notified) {
+          a._notified = true;
+          const ev = events.find(e => e.id === a.eventId);
+          if (ev) ev.status = 'alert';
+          toast(`⚡ Alerta disparado! ${a.airline} POA→${a.airport}: ${fmtBRL(match.price)}`);
+        }
+      }
+    } catch { /* ignora erros individuais */ }
+  }
+
+  save();
+  renderCalendar();
+  renderAlerts();
+  toast('✅ Preços atualizados!');
+}
+
+function startAutoRefresh() {
+  if (autoTimer) clearInterval(autoTimer);
+  autoTimer = setInterval(refreshAllAlerts, 30 * 60 * 1000);
+}
+
+// ─── COMPRAS ──────────────────────────────────────────────────────────────────
+function markPurchased(alertId) {
+  const a = alerts.find(x => x.id === alertId);
+  if (!a) return;
+  const qty = parseInt(prompt(`Quantas passagens comprar?\n(${a.airline} POA→${a.airport} · ${fmtDate(a.date)} · ${fmtBRL(a.currentPrice)}/pax)`, '1')) || 1;
+  if (!qty || qty < 1) return;
+  purchases.push({
+    id: 'p_' + Date.now(),
+    eventName: a.eventName, airline: a.airline,
+    route: `POA→${a.airport}`, date: a.date,
+    pricePerPax: a.currentPrice, qty,
+    total: a.currentPrice * qty,
+    boughtAt: new Date().toISOString().split('T')[0],
+    status: 'confirmed',
+  });
+  const ev = events.find(e => e.id === a.eventId);
+  if (ev) ev.status = 'purchased';
+  alerts = alerts.filter(x => x.id !== alertId);
+  save();
+  renderCalendar();
+  renderAlerts();
+  renderCompras();
+  updateBadges();
+  toast(`✅ Compra registrada: ${qty}× ${fmtBRL(a.currentPrice * qty)}`);
+}
+
+function renderCompras() {
+  const queue       = alerts.filter(a => a.triggered);
+  const totalSpent  = purchases.reduce((s,p) => s + p.total, 0);
+  const kpis = [
+    { icon:'✅', val: purchases.length,                                         label:'Compras Realizadas',  color:'var(--green)'  },
+    { icon:'💳', val: fmtBRL(totalSpent),                                       label:'Total Investido',     color:'var(--accent)' },
+    { icon:'⚡', val: queue.length,                                              label:'Aguardando Compra',   color:'var(--red)'    },
+    { icon:'📊', val: events.filter(e=>['monitoring','alert'].includes(e.status)).length, label:'Eventos Monitorados', color:'var(--yellow)' },
+  ];
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
+    `<div class="kpi"><div style="font-size:32px;">${k.icon}</div><div class="num" style="color:${k.color};">${k.val}</div><div class="label">${k.label}</div></div>`
+  ).join('');
+
+  const bq = document.getElementById('buyQueue');
+  bq.innerHTML = queue.length
+    ? `<div class="card" style="border-color:var(--red);margin-bottom:0;">
+        <div style="font-weight:800;color:var(--red);margin-bottom:14px;font-size:15px;">⚡ Fila de Compra — Preço Atingido!</div>
+        ${queue.map(a => `
+          <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-top:1px solid var(--border);flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+              <strong>${a.eventName}</strong><br>
+              <span style="font-size:13px;color:var(--muted);">${a.airline} · POA→${a.airport} · ${fmtDate(a.date)}</span>
+            </div>
+            <div style="font-size:20px;font-weight:900;color:var(--green);">${fmtBRL(a.currentPrice)}</div>
+            <button class="btn btn-success" onclick="markPurchased('${a.id}')">✅ Registrar Compra</button>
+          </div>`).join('')}
+      </div>`
+    : '';
+
+  const body = document.getElementById('purchaseBody');
+  body.innerHTML = purchases.length
+    ? purchases.map(p => `<tr>
+        <td><strong>${p.eventName}</strong></td>
+        <td>${p.airline}</td>
+        <td style="font-family:monospace;font-size:13px;">${p.route}</td>
+        <td>${fmtDate(p.date)}</td>
+        <td>${fmtBRL(p.pricePerPax)}</td>
+        <td style="text-align:center;">${p.qty}</td>
+        <td><strong style="color:var(--accent);">${fmtBRL(p.total)}</strong></td>
+        <td style="color:var(--muted);font-size:13px;">${p.boughtAt}</td>
+        <td><span class="pill purchased">✅ Confirmado</span></td>
+      </tr>`).join('')
+    : `<tr><td colspan="9"><div class="empty"><div class="eicon">📋</div><p>Nenhuma compra registrada ainda.</p></div></td></tr>`;
+
+  updateBadges();
+}
+
+function updateBadges() {
+  document.getElementById('badge-cal').textContent     = events.length;
+  const n = alerts.filter(a => a.triggered).length;
+  const ab = document.getElementById('badge-alert');
+  ab.textContent = n;
+  ab.className   = n > 0 ? 'badge urgent' : 'badge';
+  document.getElementById('badge-compras').textContent = purchases.length;
+}
+</script>
+</body>
+</html>
