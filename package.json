@@ -1,0 +1,6 @@
+{
+  "name": "ft-flight-manager",
+  "version": "1.0.0",
+  "description": "FuelTech Flight Manager",
+  "engines": { "node": "18.x" }
+}
