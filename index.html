@@ -300,6 +300,30 @@
   .flight-card:hover { border-color: rgba(91,110,245,.4); }
   .flight-card.cheap { border-color: var(--green); background: rgba(16,185,129,.04); }
 
+  /* ── PAX COUNTER ─────────────────────────────────────── */
+  .pax-counter {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 7px 12px;
+  }
+  .pax-label {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 700; color: var(--muted);
+    white-space: nowrap; margin-right: 4px;
+  }
+  .pax-btn {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: var(--surface3); border: 1px solid var(--border);
+    color: var(--text); font-size: 16px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    line-height: 1; transition: all .15s;
+  }
+  .pax-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .pax-num {
+    font-size: 16px; font-weight: 900; min-width: 22px;
+    text-align: center; color: var(--text);
+  }
+
   /* ── AUTOCOMPLETE ────────────────────────────────────── */
   .ac-wrap { position: relative; }
   .ac-input {
@@ -550,11 +574,47 @@
           <label>Preço alvo / pessoa (R$)</label>
           <input type="number" id="targetPrice" placeholder="Ex: 600">
         </div>
-        <div class="form-group" style="display:flex;align-items:flex-end;gap:8px;">
-          <button class="btn btn-primary" style="flex:1;padding:10px;" onclick="searchFlights()">
-            <i data-lucide="search"></i> Buscar Voos + Hotéis
-          </button>
+      </div>
+
+      <!-- Passageiros + resumo de quartos -->
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;">
+          Passageiros
         </div>
+
+        <!-- Homens -->
+        <div class="pax-counter">
+          <span class="pax-label"><i data-lucide="user" style="width:13px;height:13px;color:#60a5fa;"></i> Homens</span>
+          <button class="pax-btn" onclick="changePax('men',-1)">−</button>
+          <span class="pax-num" id="pax-men">0</span>
+          <button class="pax-btn" onclick="changePax('men',+1)">+</button>
+        </div>
+
+        <!-- Mulheres -->
+        <div class="pax-counter">
+          <span class="pax-label"><i data-lucide="user" style="width:13px;height:13px;color:#f472b6;"></i> Mulheres</span>
+          <button class="pax-btn" onclick="changePax('women',-1)">−</button>
+          <span class="pax-num" id="pax-women">0</span>
+          <button class="pax-btn" onclick="changePax('women',+1)">+</button>
+        </div>
+
+        <!-- Resumo calculado -->
+        <div id="pax-summary" style="display:none;margin-left:4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div style="height:20px;width:1px;background:var(--border);"></div>
+          <div style="font-size:13px;color:var(--muted);">
+            <i data-lucide="users" style="width:13px;height:13px;vertical-align:middle;"></i>
+            Total: <strong id="pax-total" style="color:var(--text);">0</strong> pessoas
+          </div>
+          <div style="font-size:13px;color:var(--muted);">
+            <i data-lucide="bed-double" style="width:13px;height:13px;vertical-align:middle;"></i>
+            Quartos: <strong id="pax-rooms" style="color:var(--accent);"></strong>
+          </div>
+        </div>
+
+        <div style="flex:1;"></div>
+        <button class="btn btn-primary" style="padding:10px 22px;" onclick="searchFlights()">
+          <i data-lucide="search"></i> Buscar Voos + Hotéis
+        </button>
       </div>
     </div>
     <div id="flightResults"></div>
@@ -677,6 +737,31 @@ let alerts    = JSON.parse(localStorage.getItem('ft_alerts')    || '[]');
 let purchases = JSON.parse(localStorage.getItem('ft_purchases') || '[]');
 let autoTimer = null;
 let calViewDate = new Date();
+let pax = { men: 0, women: 0 };
+
+function changePax(gender, delta) {
+  pax[gender] = Math.max(0, pax[gender] + delta);
+  document.getElementById('pax-men').textContent   = pax.men;
+  document.getElementById('pax-women').textContent = pax.women;
+
+  const total = pax.men + pax.women;
+  // Quartos: homens e mulheres em quartos separados por gênero, 2 por quarto
+  const roomsMen   = Math.ceil(pax.men   / 2);
+  const roomsWomen = Math.ceil(pax.women / 2);
+  const totalRooms = roomsMen + roomsWomen;
+
+  const summary = document.getElementById('pax-summary');
+  if (total > 0) {
+    summary.style.display = 'flex';
+    document.getElementById('pax-total').textContent = total;
+    const roomsLabel = roomsMen && roomsWomen
+      ? `${totalRooms} (${roomsMen}♂ + ${roomsWomen}♀)`
+      : `${totalRooms}`;
+    document.getElementById('pax-rooms').textContent = roomsLabel;
+  } else {
+    summary.style.display = 'none';
+  }
+}
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.onload = async () => {
@@ -1177,10 +1262,16 @@ async function searchFlights() {
       const d = new Date(date + 'T12:00:00'); d.setDate(d.getDate() + 1);
       return d.toISOString().split('T')[0];
     })();
+    const totalPax   = pax.men + pax.women;
+    const totalRooms = Math.ceil(pax.men / 2) + Math.ceil(pax.women / 2);
+    const hotelRooms = totalRooms > 0 ? totalRooms : 1;
+
     const hotelParams = new URLSearchParams({
       engine:'google_hotels', q:`hotéis em ${destInfo.city}`,
       check_in_date:date, check_out_date:hotelCheckout,
       currency:'BRL', hl:'pt', gl:'br', sort_by:'3',
+      rooms: hotelRooms,
+      adults: Math.max(1, totalPax),
     });
 
     // Fetch voos e hotéis em paralelo
@@ -1211,7 +1302,7 @@ async function searchFlights() {
       const ev = events.find(e => e.id === eventId);
       if (ev && ev.status === 'searching') { ev.status = 'monitoring'; renderCalendar(); renderMonthCalendar(); }
     }
-    renderSearchResults(results, hotels, target, origin, dest, date, hotelCheckout, destInfo.city, eventId, baseTfs, gFlightsUrl);
+    renderSearchResults(results, hotels, target, origin, dest, date, hotelCheckout, destInfo.city, eventId, baseTfs, gFlightsUrl, totalPax, hotelRooms);
   } catch(err) {
     el.innerHTML = `<div class="card"><div class="empty"><i data-lucide="alert-circle"></i>
       <p style="color:var(--red);font-weight:600;">${err.message}</p>
@@ -1228,8 +1319,10 @@ function buildBookingUrl(bookingToken, baseTfs) {
   return null;
 }
 
-function renderSearchResults(results, hotels, target, origin, dest, date, checkout, destCity, eventId, baseTfs, gFlightsUrl) {
+function renderSearchResults(results, hotels, target, origin, dest, date, checkout, destCity, eventId, baseTfs, gFlightsUrl, totalPax, hotelRooms) {
   const el = document.getElementById('flightResults');
+  totalPax   = totalPax   || 0;
+  hotelRooms = hotelRooms || 1;
 
   // ── VOOS ────
   const flightCards = results.slice(0, 12).map((f, idx) => {
@@ -1283,9 +1376,10 @@ function renderSearchResults(results, hotels, target, origin, dest, date, checko
         ${cheap ? `<div style="margin-top:6px;"><span class="pill purchased">Dentro do orçamento</span></div>` : ''}
       </div>
 
-      <div style="text-align:right;min-width:110px;">
+      <div style="text-align:right;min-width:120px;">
         <div style="font-size:22px;font-weight:900;color:${cheap?'var(--green)':'var(--text)'};">${price ? fmtBRL(price) : '—'}</div>
         <div style="font-size:11px;color:var(--muted);">por pessoa</div>
+        ${totalPax > 0 && price ? `<div style="font-size:12px;font-weight:700;color:var(--accent);margin-top:3px;">${fmtBRL(price * totalPax)} total (${totalPax} pax)</div>` : ''}
         ${target && price ? `<div style="font-size:11px;font-weight:600;color:${cheap?'var(--green)':'var(--muted)'};">${cheap ? `↓ ${fmtBRL(target-price)} abaixo` : `↑ ${fmtBRL(price-target)} acima`}</div>` : ''}
       </div>
 
@@ -1365,7 +1459,9 @@ function renderSearchResults(results, hotels, target, origin, dest, date, checko
             <i data-lucide="building-2" style="width:16px;height:16px;color:var(--accent);"></i>
             Hotéis em ${destCity}
           </div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px;">${fmtDate(date)} → ${fmtDate(checkout)} · ${hotels.length} opções encontradas</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">${fmtDate(date)} → ${fmtDate(checkout)} · ${hotels.length} opções
+            ${hotelRooms > 1 ? `· <strong style="color:var(--accent);">${hotelRooms} quartos</strong> (${pax.men ? pax.men+'♂' : ''}${pax.men && pax.women ? ' + ' : ''}${pax.women ? pax.women+'♀' : ''})` : ''}
+          </div>
         </div>
         <a href="https://www.google.com/travel/hotels?q=hoteis+em+${encodeURIComponent(destCity)}&hl=pt&gl=br&curr=BRL" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;">
           <i data-lucide="external-link"></i> Google Hotels
