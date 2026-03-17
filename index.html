@@ -1039,9 +1039,11 @@ function goSearch(id) {
   const ev = events.find(e => e.id === id);
   if (ev) {
     document.getElementById('selEvent').value  = id;
-    document.getElementById('selDest').value   = ev.airport;
+    document.getElementById('ac-dest')._setCode(ev.airport);
     document.getElementById('selDate').value   = ev.startDate;
     document.getElementById('selReturn').value = ev.endDate;
+    const origin = document.getElementById('ac-origin')._getCode();
+    if (origin === ev.airport) document.getElementById('ac-origin')._setCode('POA');
   }
   switchTab('busca');
 }
