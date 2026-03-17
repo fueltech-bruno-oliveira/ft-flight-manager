@@ -502,6 +502,9 @@
             <input type="text" id="searchEvents" placeholder="Filtrar eventos…" onkeyup="renderCalendar()"
               style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 12px 7px 30px;color:var(--text);font-size:13px;width:200px;outline:none;">
           </div>
+          <button class="btn btn-primary btn-sm" onclick="toggleAddEventPanel()">
+            <i data-lucide="plus"></i> Adicionar Evento
+          </button>
           <button class="btn btn-ghost btn-sm" id="btnHideExpired" onclick="toggleHideExpired()">
             <i data-lucide="eye-off"></i> Ocultar encerrados
           </button>
@@ -510,6 +513,43 @@
           </button>
           <button class="btn btn-ghost btn-sm" onclick="downloadTemplate()">
             <i data-lucide="download"></i> Modelo
+          </button>
+        </div>
+      </div>
+
+      <!-- Adicionar evento manual (colapsável) -->
+      <div id="addEventPanel" style="display:none;padding:20px;border-bottom:1px solid var(--border);background:var(--surface2);">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:7px;">
+          <i data-lucide="calendar-plus" style="width:15px;height:15px;color:var(--accent);"></i> Novo Evento
+        </div>
+        <div class="form-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+          <div class="form-group" style="grid-column:span 2;">
+            <label>Nome do Evento</label>
+            <input type="text" id="newEvName" placeholder="Ex: Corrida Velopark 2026" style="width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px;outline:none;">
+          </div>
+          <div class="form-group">
+            <label>Cidade / Destino</label>
+            <input type="text" id="newEvCity" placeholder="Ex: Campinas, SP" style="width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px;outline:none;">
+          </div>
+          <div class="form-group">
+            <label>Aeroporto mais próximo</label>
+            <div class="ac-wrap" id="ac-new-event-airport"></div>
+          </div>
+          <div class="form-group">
+            <label>Data de Início</label>
+            <input type="date" id="newEvStart" style="width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px;outline:none;">
+          </div>
+          <div class="form-group">
+            <label>Data de Fim (opcional)</label>
+            <input type="date" id="newEvEnd" style="width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px;outline:none;">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button class="btn btn-primary" onclick="saveNewEvent()">
+            <i data-lucide="save"></i> Salvar Evento
+          </button>
+          <button class="btn btn-ghost" onclick="toggleAddEventPanel()">
+            Cancelar
           </button>
         </div>
       </div>
@@ -671,49 +711,250 @@
 <script>
 // ─── AEROPORTOS ───────────────────────────────────────────────────────────────
 const AIRPORTS = [
-  { code:'POA', label:'POA — Porto Alegre, RS',                  city:'Porto Alegre'       },
-  { code:'VCP', label:'VCP — Campinas / Viracopos, SP',          city:'Campinas'            },
-  { code:'GRU', label:'GRU — São Paulo / Guarulhos, SP',         city:'São Paulo'           },
-  { code:'CGH', label:'CGH — São Paulo / Congonhas, SP',         city:'São Paulo'           },
-  { code:'BSB', label:'BSB — Brasília, DF',                      city:'Brasília'            },
-  { code:'GIG', label:'GIG — Rio de Janeiro / Galeão, RJ',       city:'Rio de Janeiro'      },
-  { code:'SDU', label:'SDU — Rio de Janeiro / Santos Dumont, RJ',city:'Rio de Janeiro'      },
-  { code:'CNF', label:'CNF — Belo Horizonte / Confins, MG',      city:'Belo Horizonte'      },
-  { code:'CWB', label:'CWB — Curitiba, PR',                      city:'Curitiba'            },
-  { code:'FLN', label:'FLN — Florianópolis, SC',                 city:'Florianópolis'       },
-  { code:'NVT', label:'NVT — Navegantes / Balneário Camboriú, SC',city:'Navegantes'         },
-  { code:'JOI', label:'JOI — Joinville, SC',                     city:'Joinville'           },
-  { code:'XAP', label:'XAP — Chapecó, SC',                       city:'Chapecó'             },
-  { code:'SSA', label:'SSA — Salvador, BA',                      city:'Salvador'            },
-  { code:'BPS', label:'BPS — Porto Seguro, BA',                  city:'Porto Seguro'        },
-  { code:'IOS', label:'IOS — Ilhéus, BA',                        city:'Ilhéus'              },
-  { code:'REC', label:'REC — Recife, PE',                        city:'Recife'              },
-  { code:'FOR', label:'FOR — Fortaleza, CE',                     city:'Fortaleza'           },
-  { code:'NAT', label:'NAT — Natal, RN',                         city:'Natal'               },
-  { code:'JPA', label:'JPA — João Pessoa, PB',                   city:'João Pessoa'         },
-  { code:'MCZ', label:'MCZ — Maceió, AL',                        city:'Maceió'              },
-  { code:'AJU', label:'AJU — Aracaju, SE',                       city:'Aracaju'             },
-  { code:'THE', label:'THE — Teresina, PI',                      city:'Teresina'            },
-  { code:'SLZ', label:'SLZ — São Luís, MA',                      city:'São Luís'            },
-  { code:'BEL', label:'BEL — Belém, PA',                         city:'Belém'               },
-  { code:'MAO', label:'MAO — Manaus, AM',                        city:'Manaus'              },
-  { code:'PVH', label:'PVH — Porto Velho, RO',                   city:'Porto Velho'         },
-  { code:'RBR', label:'RBR — Rio Branco, AC',                    city:'Rio Branco'          },
-  { code:'BVB', label:'BVB — Boa Vista, RR',                     city:'Boa Vista'           },
-  { code:'MCP', label:'MCP — Macapá, AP',                        city:'Macapá'              },
-  { code:'PMW', label:'PMW — Palmas, TO',                        city:'Palmas'              },
-  { code:'GYN', label:'GYN — Goiânia, GO',                       city:'Goiânia'             },
-  { code:'CGB', label:'CGB — Cuiabá, MT',                        city:'Cuiabá'              },
-  { code:'CGR', label:'CGR — Campo Grande, MS',                  city:'Campo Grande'        },
-  { code:'VIX', label:'VIX — Vitória, ES',                       city:'Vitória'             },
-  { code:'UDI', label:'UDI — Uberlândia, MG',                    city:'Uberlândia'          },
-  { code:'RAO', label:'RAO — Ribeirão Preto, SP',                city:'Ribeirão Preto'      },
-  { code:'SJK', label:'SJK — São José dos Campos, SP',           city:'São José dos Campos' },
-  { code:'LDB', label:'LDB — Londrina, PR',                      city:'Londrina'            },
-  { code:'IGU', label:'IGU — Foz do Iguaçu, PR',                 city:'Foz do Iguaçu'       },
-  { code:'CFB', label:'CFB — Cabo Frio, RJ',                     city:'Cabo Frio'           },
-  { code:'FEN', label:'FEN — Fernando de Noronha, PE',           city:'Fernando de Noronha' },
-  { code:'PPB', label:'PPB — Presidente Prudente, SP',           city:'Presidente Prudente' },
+  // ── BRASIL ──────────────────────────────────────────
+  { code:'POA', label:'POA — Porto Alegre, RS',                   city:'Porto Alegre',        region:'Brasil' },
+  { code:'VCP', label:'VCP — Campinas / Viracopos, SP',           city:'Campinas',             region:'Brasil' },
+  { code:'GRU', label:'GRU — São Paulo / Guarulhos, SP',          city:'São Paulo',            region:'Brasil' },
+  { code:'CGH', label:'CGH — São Paulo / Congonhas, SP',          city:'São Paulo',            region:'Brasil' },
+  { code:'BSB', label:'BSB — Brasília, DF',                       city:'Brasília',             region:'Brasil' },
+  { code:'GIG', label:'GIG — Rio de Janeiro / Galeão, RJ',        city:'Rio de Janeiro',       region:'Brasil' },
+  { code:'SDU', label:'SDU — Rio de Janeiro / Santos Dumont, RJ', city:'Rio de Janeiro',       region:'Brasil' },
+  { code:'CNF', label:'CNF — Belo Horizonte / Confins, MG',       city:'Belo Horizonte',       region:'Brasil' },
+  { code:'CWB', label:'CWB — Curitiba, PR',                       city:'Curitiba',             region:'Brasil' },
+  { code:'FLN', label:'FLN — Florianópolis, SC',                  city:'Florianópolis',        region:'Brasil' },
+  { code:'NVT', label:'NVT — Navegantes / Balneário Camboriú, SC',city:'Navegantes',           region:'Brasil' },
+  { code:'JOI', label:'JOI — Joinville, SC',                      city:'Joinville',            region:'Brasil' },
+  { code:'XAP', label:'XAP — Chapecó, SC',                        city:'Chapecó',              region:'Brasil' },
+  { code:'SSA', label:'SSA — Salvador, BA',                       city:'Salvador',             region:'Brasil' },
+  { code:'BPS', label:'BPS — Porto Seguro, BA',                   city:'Porto Seguro',         region:'Brasil' },
+  { code:'IOS', label:'IOS — Ilhéus, BA',                         city:'Ilhéus',               region:'Brasil' },
+  { code:'REC', label:'REC — Recife, PE',                         city:'Recife',               region:'Brasil' },
+  { code:'FOR', label:'FOR — Fortaleza, CE',                      city:'Fortaleza',            region:'Brasil' },
+  { code:'NAT', label:'NAT — Natal, RN',                          city:'Natal',                region:'Brasil' },
+  { code:'JPA', label:'JPA — João Pessoa, PB',                    city:'João Pessoa',          region:'Brasil' },
+  { code:'MCZ', label:'MCZ — Maceió, AL',                         city:'Maceió',               region:'Brasil' },
+  { code:'AJU', label:'AJU — Aracaju, SE',                        city:'Aracaju',              region:'Brasil' },
+  { code:'THE', label:'THE — Teresina, PI',                       city:'Teresina',             region:'Brasil' },
+  { code:'SLZ', label:'SLZ — São Luís, MA',                       city:'São Luís',             region:'Brasil' },
+  { code:'BEL', label:'BEL — Belém, PA',                          city:'Belém',                region:'Brasil' },
+  { code:'MAO', label:'MAO — Manaus, AM',                         city:'Manaus',               region:'Brasil' },
+  { code:'PVH', label:'PVH — Porto Velho, RO',                    city:'Porto Velho',          region:'Brasil' },
+  { code:'RBR', label:'RBR — Rio Branco, AC',                     city:'Rio Branco',           region:'Brasil' },
+  { code:'BVB', label:'BVB — Boa Vista, RR',                      city:'Boa Vista',            region:'Brasil' },
+  { code:'MCP', label:'MCP — Macapá, AP',                         city:'Macapá',               region:'Brasil' },
+  { code:'PMW', label:'PMW — Palmas, TO',                         city:'Palmas',               region:'Brasil' },
+  { code:'GYN', label:'GYN — Goiânia, GO',                        city:'Goiânia',              region:'Brasil' },
+  { code:'CGB', label:'CGB — Cuiabá, MT',                         city:'Cuiabá',               region:'Brasil' },
+  { code:'CGR', label:'CGR — Campo Grande, MS',                   city:'Campo Grande',         region:'Brasil' },
+  { code:'VIX', label:'VIX — Vitória, ES',                        city:'Vitória',              region:'Brasil' },
+  { code:'UDI', label:'UDI — Uberlândia, MG',                     city:'Uberlândia',           region:'Brasil' },
+  { code:'RAO', label:'RAO — Ribeirão Preto, SP',                 city:'Ribeirão Preto',       region:'Brasil' },
+  { code:'SJK', label:'SJK — São José dos Campos, SP',            city:'São José dos Campos',  region:'Brasil' },
+  { code:'LDB', label:'LDB — Londrina, PR',                       city:'Londrina',             region:'Brasil' },
+  { code:'IGU', label:'IGU — Foz do Iguaçu, PR',                  city:'Foz do Iguaçu',        region:'Brasil' },
+  { code:'CFB', label:'CFB — Cabo Frio, RJ',                      city:'Cabo Frio',            region:'Brasil' },
+  { code:'FEN', label:'FEN — Fernando de Noronha, PE',            city:'Fernando de Noronha',  region:'Brasil' },
+  { code:'PPB', label:'PPB — Presidente Prudente, SP',            city:'Presidente Prudente',  region:'Brasil' },
+  // ── AMÉRICA DO SUL ──────────────────────────────────
+  { code:'EZE', label:'EZE — Buenos Aires / Ezeiza, Argentina',   city:'Buenos Aires',         region:'América do Sul' },
+  { code:'AEP', label:'AEP — Buenos Aires / Aeroparque, Argentina',city:'Buenos Aires',        region:'América do Sul' },
+  { code:'COR', label:'COR — Córdoba, Argentina',                 city:'Córdoba',              region:'América do Sul' },
+  { code:'MDZ', label:'MDZ — Mendoza, Argentina',                 city:'Mendoza',              region:'América do Sul' },
+  { code:'SCL', label:'SCL — Santiago, Chile',                    city:'Santiago',             region:'América do Sul' },
+  { code:'PMC', label:'PMC — Puerto Montt, Chile',                city:'Puerto Montt',         region:'América do Sul' },
+  { code:'LIM', label:'LIM — Lima, Peru',                         city:'Lima',                 region:'América do Sul' },
+  { code:'CUZ', label:'CUZ — Cusco, Peru',                        city:'Cusco',                region:'América do Sul' },
+  { code:'BOG', label:'BOG — Bogotá, Colômbia',                   city:'Bogotá',               region:'América do Sul' },
+  { code:'MDE', label:'MDE — Medellín, Colômbia',                 city:'Medellín',             region:'América do Sul' },
+  { code:'UIO', label:'UIO — Quito, Equador',                     city:'Quito',                region:'América do Sul' },
+  { code:'GYE', label:'GYE — Guayaquil, Equador',                 city:'Guayaquil',            region:'América do Sul' },
+  { code:'CCS', label:'CCS — Caracas, Venezuela',                 city:'Caracas',              region:'América do Sul' },
+  { code:'MVD', label:'MVD — Montevidéu, Uruguai',                city:'Montevidéu',           region:'América do Sul' },
+  { code:'ASU', label:'ASU — Assunção, Paraguai',                 city:'Assunção',             region:'América do Sul' },
+  { code:'LPB', label:'LPB — La Paz, Bolívia',                    city:'La Paz',               region:'América do Sul' },
+  { code:'VVI', label:'VVI — Santa Cruz de la Sierra, Bolívia',   city:'Santa Cruz',           region:'América do Sul' },
+  { code:'GEO', label:'GEO — Georgetown, Guiana',                 city:'Georgetown',           region:'América do Sul' },
+  // ── AMERICA DO NORTE ────────────────────────────────
+  { code:'JFK', label:'JFK — Nova York / JFK, EUA',               city:'Nova York',            region:'América do Norte' },
+  { code:'LGA', label:'LGA — Nova York / LaGuardia, EUA',         city:'Nova York',            region:'América do Norte' },
+  { code:'EWR', label:'EWR — Nova York / Newark, EUA',            city:'Nova York',            region:'América do Norte' },
+  { code:'LAX', label:'LAX — Los Angeles, EUA',                   city:'Los Angeles',          region:'América do Norte' },
+  { code:'SFO', label:'SFO — São Francisco, EUA',                 city:'São Francisco',        region:'América do Norte' },
+  { code:'ORD', label:'ORD — Chicago / O\'Hare, EUA',             city:'Chicago',              region:'América do Norte' },
+  { code:'MDW', label:'MDW — Chicago / Midway, EUA',              city:'Chicago',              region:'América do Norte' },
+  { code:'MIA', label:'MIA — Miami, EUA',                         city:'Miami',                region:'América do Norte' },
+  { code:'FLL', label:'FLL — Fort Lauderdale, EUA',               city:'Fort Lauderdale',      region:'América do Norte' },
+  { code:'ATL', label:'ATL — Atlanta, EUA',                       city:'Atlanta',              region:'América do Norte' },
+  { code:'DFW', label:'DFW — Dallas / Fort Worth, EUA',           city:'Dallas',               region:'América do Norte' },
+  { code:'IAH', label:'IAH — Houston / Intercontinental, EUA',    city:'Houston',              region:'América do Norte' },
+  { code:'DEN', label:'DEN — Denver, EUA',                        city:'Denver',               region:'América do Norte' },
+  { code:'SEA', label:'SEA — Seattle, EUA',                       city:'Seattle',              region:'América do Norte' },
+  { code:'BOS', label:'BOS — Boston, EUA',                        city:'Boston',               region:'América do Norte' },
+  { code:'LAS', label:'LAS — Las Vegas, EUA',                     city:'Las Vegas',            region:'América do Norte' },
+  { code:'PHX', label:'PHX — Phoenix, EUA',                       city:'Phoenix',              region:'América do Norte' },
+  { code:'IAD', label:'IAD — Washington / Dulles, EUA',           city:'Washington',           region:'América do Norte' },
+  { code:'DCA', label:'DCA — Washington / Reagan, EUA',           city:'Washington',           region:'América do Norte' },
+  { code:'MSP', label:'MSP — Minneapolis, EUA',                   city:'Minneapolis',          region:'América do Norte' },
+  { code:'DTW', label:'DTW — Detroit, EUA',                       city:'Detroit',              region:'América do Norte' },
+  { code:'PDX', label:'PDX — Portland, EUA',                      city:'Portland',             region:'América do Norte' },
+  { code:'SLC', label:'SLC — Salt Lake City, EUA',                city:'Salt Lake City',       region:'América do Norte' },
+  { code:'MCO', label:'MCO — Orlando, EUA',                       city:'Orlando',              region:'América do Norte' },
+  { code:'CLT', label:'CLT — Charlotte, EUA',                     city:'Charlotte',            region:'América do Norte' },
+  { code:'YYZ', label:'YYZ — Toronto, Canadá',                    city:'Toronto',              region:'América do Norte' },
+  { code:'YVR', label:'YVR — Vancouver, Canadá',                  city:'Vancouver',            region:'América do Norte' },
+  { code:'YUL', label:'YUL — Montreal, Canadá',                   city:'Montreal',             region:'América do Norte' },
+  { code:'YYC', label:'YYC — Calgary, Canadá',                    city:'Calgary',              region:'América do Norte' },
+  { code:'MEX', label:'MEX — Cidade do México, México',           city:'Cidade do México',     region:'América do Norte' },
+  { code:'CUN', label:'CUN — Cancún, México',                     city:'Cancún',               region:'América do Norte' },
+  { code:'GDL', label:'GDL — Guadalajara, México',                city:'Guadalajara',          region:'América do Norte' },
+  { code:'MTY', label:'MTY — Monterrey, México',                  city:'Monterrey',            region:'América do Norte' },
+  { code:'SJO', label:'SJO — San José, Costa Rica',               city:'San José',             region:'América do Norte' },
+  { code:'PTY', label:'PTY — Cidade do Panamá, Panamá',           city:'Cidade do Panamá',     region:'América do Norte' },
+  { code:'HAV', label:'HAV — Havana, Cuba',                       city:'Havana',               region:'América do Norte' },
+  { code:'SDQ', label:'SDQ — Santo Domingo, Rep. Dominicana',     city:'Santo Domingo',        region:'América do Norte' },
+  { code:'MBJ', label:'MBJ — Montego Bay, Jamaica',               city:'Montego Bay',          region:'América do Norte' },
+  // ── EUROPA ──────────────────────────────────────────
+  { code:'LHR', label:'LHR — Londres / Heathrow, Reino Unido',    city:'Londres',              region:'Europa' },
+  { code:'LGW', label:'LGW — Londres / Gatwick, Reino Unido',     city:'Londres',              region:'Europa' },
+  { code:'STN', label:'STN — Londres / Stansted, Reino Unido',    city:'Londres',              region:'Europa' },
+  { code:'EDI', label:'EDI — Edimburgo, Reino Unido',             city:'Edimburgo',            region:'Europa' },
+  { code:'MAN', label:'MAN — Manchester, Reino Unido',            city:'Manchester',           region:'Europa' },
+  { code:'CDG', label:'CDG — Paris / Charles de Gaulle, França',  city:'Paris',                region:'Europa' },
+  { code:'ORY', label:'ORY — Paris / Orly, França',               city:'Paris',                region:'Europa' },
+  { code:'NCE', label:'NCE — Nice, França',                       city:'Nice',                 region:'Europa' },
+  { code:'LYS', label:'LYS — Lyon, França',                       city:'Lyon',                 region:'Europa' },
+  { code:'FRA', label:'FRA — Frankfurt, Alemanha',                city:'Frankfurt',            region:'Europa' },
+  { code:'MUC', label:'MUC — Munique, Alemanha',                  city:'Munique',              region:'Europa' },
+  { code:'BER', label:'BER — Berlim, Alemanha',                   city:'Berlim',               region:'Europa' },
+  { code:'DUS', label:'DUS — Düsseldorf, Alemanha',               city:'Düsseldorf',           region:'Europa' },
+  { code:'HAM', label:'HAM — Hamburgo, Alemanha',                 city:'Hamburgo',             region:'Europa' },
+  { code:'AMS', label:'AMS — Amsterdã, Holanda',                  city:'Amsterdã',             region:'Europa' },
+  { code:'MAD', label:'MAD — Madri, Espanha',                     city:'Madri',                region:'Europa' },
+  { code:'BCN', label:'BCN — Barcelona, Espanha',                 city:'Barcelona',            region:'Europa' },
+  { code:'AGP', label:'AGP — Málaga, Espanha',                    city:'Málaga',               region:'Europa' },
+  { code:'FCO', label:'FCO — Roma / Fiumicino, Itália',           city:'Roma',                 region:'Europa' },
+  { code:'MXP', label:'MXP — Milão / Malpensa, Itália',           city:'Milão',                region:'Europa' },
+  { code:'VCE', label:'VCE — Veneza, Itália',                     city:'Veneza',               region:'Europa' },
+  { code:'NAP', label:'NAP — Nápoles, Itália',                    city:'Nápoles',              region:'Europa' },
+  { code:'LIS', label:'LIS — Lisboa, Portugal',                   city:'Lisboa',               region:'Europa' },
+  { code:'OPO', label:'OPO — Porto, Portugal',                    city:'Porto',                region:'Europa' },
+  { code:'FAO', label:'FAO — Faro, Portugal',                     city:'Faro',                 region:'Europa' },
+  { code:'ZRH', label:'ZRH — Zurique, Suíça',                     city:'Zurique',              region:'Europa' },
+  { code:'GVA', label:'GVA — Genebra, Suíça',                     city:'Genebra',              region:'Europa' },
+  { code:'VIE', label:'VIE — Viena, Áustria',                     city:'Viena',                region:'Europa' },
+  { code:'BRU', label:'BRU — Bruxelas, Bélgica',                  city:'Bruxelas',             region:'Europa' },
+  { code:'CPH', label:'CPH — Copenhague, Dinamarca',              city:'Copenhague',           region:'Europa' },
+  { code:'OSL', label:'OSL — Oslo, Noruega',                      city:'Oslo',                 region:'Europa' },
+  { code:'ARN', label:'ARN — Estocolmo, Suécia',                  city:'Estocolmo',            region:'Europa' },
+  { code:'HEL', label:'HEL — Helsinque, Finlândia',               city:'Helsinque',            region:'Europa' },
+  { code:'DUB', label:'DUB — Dublin, Irlanda',                    city:'Dublin',               region:'Europa' },
+  { code:'ATH', label:'ATH — Atenas, Grécia',                     city:'Atenas',               region:'Europa' },
+  { code:'IST', label:'IST — Istambul, Turquia',                  city:'Istambul',             region:'Europa' },
+  { code:'SAW', label:'SAW — Istambul / Sabiha, Turquia',         city:'Istambul',             region:'Europa' },
+  { code:'PRG', label:'PRG — Praga, República Tcheca',            city:'Praga',                region:'Europa' },
+  { code:'WAW', label:'WAW — Varsóvia, Polônia',                  city:'Varsóvia',             region:'Europa' },
+  { code:'BUD', label:'BUD — Budapeste, Hungria',                 city:'Budapeste',            region:'Europa' },
+  { code:'BCM', label:'OTP — Bucareste, Romênia',                 city:'Bucareste',            region:'Europa' },
+  { code:'SVO', label:'SVO — Moscou / Sheremetyevo, Rússia',      city:'Moscou',               region:'Europa' },
+  { code:'LED', label:'LED — São Petersburgo, Rússia',            city:'São Petersburgo',      region:'Europa' },
+  { code:'KEF', label:'KEF — Reykjavík, Islândia',                city:'Reykjavík',            region:'Europa' },
+  { code:'BEG', label:'BEG — Belgrado, Sérvia',                   city:'Belgrado',             region:'Europa' },
+  { code:'SOF', label:'SOF — Sofia, Bulgária',                    city:'Sofia',                region:'Europa' },
+  { code:'ZAG', label:'ZAG — Zagreb, Croácia',                    city:'Zagreb',               region:'Europa' },
+  { code:'DBV', label:'DBV — Dubrovnik, Croácia',                 city:'Dubrovnik',            region:'Europa' },
+  { code:'SKG', label:'SKG — Thessaloniki, Grécia',               city:'Thessaloniki',         region:'Europa' },
+  { code:'TXL', label:'TXL — Berlim / Tegel, Alemanha',           city:'Berlim',               region:'Europa' },
+  // ── ORIENTE MÉDIO / ÁFRICA DO NORTE ─────────────────
+  { code:'DXB', label:'DXB — Dubai, Emirados Árabes',             city:'Dubai',                region:'Oriente Médio' },
+  { code:'AUH', label:'AUH — Abu Dhabi, Emirados Árabes',         city:'Abu Dhabi',            region:'Oriente Médio' },
+  { code:'DOH', label:'DOH — Doha, Catar',                        city:'Doha',                 region:'Oriente Médio' },
+  { code:'RUH', label:'RUH — Riade, Arábia Saudita',              city:'Riade',                region:'Oriente Médio' },
+  { code:'JED', label:'JED — Jeddah, Arábia Saudita',             city:'Jeddah',               region:'Oriente Médio' },
+  { code:'KWI', label:'KWI — Kuwait City, Kuwait',                city:'Kuwait City',          region:'Oriente Médio' },
+  { code:'BAH', label:'BAH — Manama, Barein',                     city:'Manama',               region:'Oriente Médio' },
+  { code:'AMM', label:'AMM — Amã, Jordânia',                      city:'Amã',                  region:'Oriente Médio' },
+  { code:'BEY', label:'BEY — Beirute, Líbano',                    city:'Beirute',              region:'Oriente Médio' },
+  { code:'TLV', label:'TLV — Tel Aviv, Israel',                   city:'Tel Aviv',             region:'Oriente Médio' },
+  { code:'MCT', label:'MCT — Mascate, Omã',                       city:'Mascate',              region:'Oriente Médio' },
+  { code:'CAI', label:'CAI — Cairo, Egito',                       city:'Cairo',                region:'África' },
+  { code:'CMN', label:'CMN — Casablanca, Marrocos',               city:'Casablanca',           region:'África' },
+  { code:'RAK', label:'RAK — Marrakech, Marrocos',                city:'Marrakech',            region:'África' },
+  { code:'TUN', label:'TUN — Tunis, Tunísia',                     city:'Tunis',                region:'África' },
+  { code:'ALG', label:'ALG — Argel, Argélia',                     city:'Argel',                region:'África' },
+  // ── ÁFRICA SUBSAARIANA ───────────────────────────────
+  { code:'JNB', label:'JNB — Joanesburgo, África do Sul',         city:'Joanesburgo',          region:'África' },
+  { code:'CPT', label:'CPT — Cidade do Cabo, África do Sul',      city:'Cidade do Cabo',       region:'África' },
+  { code:'DUR', label:'DUR — Durban, África do Sul',              city:'Durban',               region:'África' },
+  { code:'NBO', label:'NBO — Nairóbi, Quênia',                    city:'Nairóbi',              region:'África' },
+  { code:'MBA', label:'MBA — Mombasa, Quênia',                    city:'Mombasa',              region:'África' },
+  { code:'ADD', label:'ADD — Adis Abeba, Etiópia',                city:'Adis Abeba',           region:'África' },
+  { code:'LOS', label:'LOS — Lagos, Nigéria',                     city:'Lagos',                region:'África' },
+  { code:'ABV', label:'ABV — Abuja, Nigéria',                     city:'Abuja',                region:'África' },
+  { code:'DKR', label:'DKR — Dakar, Senegal',                     city:'Dakar',                region:'África' },
+  { code:'ABJ', label:'ABJ — Abidjan, Costa do Marfim',           city:'Abidjan',              region:'África' },
+  { code:'ACC', label:'ACC — Acra, Gana',                         city:'Acra',                 region:'África' },
+  { code:'TNR', label:'TNR — Antananarivo, Madagascar',           city:'Antananarivo',         region:'África' },
+  { code:'MRU', label:'MRU — Ilhas Maurício',                     city:'Port Louis',           region:'África' },
+  { code:'RUN', label:'RUN — Reunião',                            city:'Saint-Denis',          region:'África' },
+  { code:'DAR', label:'DAR — Dar es Salaam, Tanzânia',            city:'Dar es Salaam',        region:'África' },
+  // ── ÁSIA ────────────────────────────────────────────
+  { code:'NRT', label:'NRT — Tóquio / Narita, Japão',             city:'Tóquio',               region:'Ásia' },
+  { code:'HND', label:'HND — Tóquio / Haneda, Japão',             city:'Tóquio',               region:'Ásia' },
+  { code:'KIX', label:'KIX — Osaka, Japão',                       city:'Osaka',                region:'Ásia' },
+  { code:'ITM', label:'ITM — Osaka / Itami, Japão',               city:'Osaka',                region:'Ásia' },
+  { code:'NGO', label:'NGO — Nagoya, Japão',                      city:'Nagoya',               region:'Ásia' },
+  { code:'HKG', label:'HKG — Hong Kong',                          city:'Hong Kong',            region:'Ásia' },
+  { code:'PEK', label:'PEK — Pequim / Capital, China',            city:'Pequim',               region:'Ásia' },
+  { code:'PKX', label:'PKX — Pequim / Daxing, China',             city:'Pequim',               region:'Ásia' },
+  { code:'PVG', label:'PVG — Xangai / Pudong, China',             city:'Xangai',               region:'Ásia' },
+  { code:'SHA', label:'SHA — Xangai / Hongqiao, China',           city:'Xangai',               region:'Ásia' },
+  { code:'CAN', label:'CAN — Guangzhou, China',                   city:'Guangzhou',            region:'Ásia' },
+  { code:'SZX', label:'SZX — Shenzhen, China',                    city:'Shenzhen',             region:'Ásia' },
+  { code:'CTU', label:'CTU — Chengdu, China',                     city:'Chengdu',              region:'Ásia' },
+  { code:'XIY', label:'XIY — Xian, China',                        city:'Xian',                 region:'Ásia' },
+  { code:'ICN', label:'ICN — Seul / Incheon, Coreia do Sul',      city:'Seul',                 region:'Ásia' },
+  { code:'GMP', label:'GMP — Seul / Gimpo, Coreia do Sul',        city:'Seul',                 region:'Ásia' },
+  { code:'TPE', label:'TPE — Taipei, Taiwan',                     city:'Taipei',               region:'Ásia' },
+  { code:'SIN', label:'SIN — Singapura',                          city:'Singapura',            region:'Ásia' },
+  { code:'KUL', label:'KUL — Kuala Lumpur, Malásia',              city:'Kuala Lumpur',         region:'Ásia' },
+  { code:'BKK', label:'BKK — Bangkok / Suvarnabhumi, Tailândia',  city:'Bangkok',              region:'Ásia' },
+  { code:'DMK', label:'DMK — Bangkok / Don Mueang, Tailândia',    city:'Bangkok',              region:'Ásia' },
+  { code:'HKT', label:'HKT — Phuket, Tailândia',                  city:'Phuket',               region:'Ásia' },
+  { code:'CNX', label:'CNX — Chiang Mai, Tailândia',              city:'Chiang Mai',           region:'Ásia' },
+  { code:'SGN', label:'SGN — Ho Chi Minh, Vietnã',                city:'Ho Chi Minh',          region:'Ásia' },
+  { code:'HAN', label:'HAN — Hanói, Vietnã',                      city:'Hanói',                region:'Ásia' },
+  { code:'DAD', label:'DAD — Da Nang, Vietnã',                    city:'Da Nang',              region:'Ásia' },
+  { code:'MNL', label:'MNL — Manila, Filipinas',                  city:'Manila',               region:'Ásia' },
+  { code:'CEB', label:'CEB — Cebu, Filipinas',                    city:'Cebu',                 region:'Ásia' },
+  { code:'CGK', label:'CGK — Jacarta, Indonésia',                 city:'Jacarta',              region:'Ásia' },
+  { code:'DPS', label:'DPS — Bali / Denpasar, Indonésia',         city:'Bali',                 region:'Ásia' },
+  { code:'DEL', label:'DEL — Nova Delhi, Índia',                  city:'Nova Delhi',           region:'Ásia' },
+  { code:'BOM', label:'BOM — Mumbai, Índia',                      city:'Mumbai',               region:'Ásia' },
+  { code:'BLR', label:'BLR — Bengaluru, Índia',                   city:'Bengaluru',            region:'Ásia' },
+  { code:'MAA', label:'MAA — Chennai, Índia',                     city:'Chennai',              region:'Ásia' },
+  { code:'CCU', label:'CCU — Calcutá, Índia',                     city:'Calcutá',              region:'Ásia' },
+  { code:'HYD', label:'HYD — Hyderabad, Índia',                   city:'Hyderabad',            region:'Ásia' },
+  { code:'CMB', label:'CMB — Colombo, Sri Lanka',                 city:'Colombo',              region:'Ásia' },
+  { code:'KTM', label:'KTM — Catmandu, Nepal',                    city:'Catmandu',             region:'Ásia' },
+  { code:'DAC', label:'DAC — Dacca, Bangladesh',                  city:'Dacca',                region:'Ásia' },
+  { code:'KHI', label:'KHI — Karachi, Paquistão',                 city:'Karachi',              region:'Ásia' },
+  { code:'LHE', label:'LHE — Lahore, Paquistão',                  city:'Lahore',               region:'Ásia' },
+  { code:'ISB', label:'ISB — Islamabad, Paquistão',               city:'Islamabad',            region:'Ásia' },
+  { code:'TAS', label:'TAS — Tashkent, Uzbequistão',              city:'Tashkent',             region:'Ásia' },
+  { code:'ALA', label:'ALA — Almaty, Cazaquistão',                city:'Almaty',               region:'Ásia' },
+  { code:'ULN', label:'ULN — Ulaanbaatar, Mongólia',              city:'Ulaanbaatar',          region:'Ásia' },
+  // ── OCEANIA ─────────────────────────────────────────
+  { code:'SYD', label:'SYD — Sydney, Austrália',                  city:'Sydney',               region:'Oceania' },
+  { code:'MEL', label:'MEL — Melbourne, Austrália',               city:'Melbourne',            region:'Oceania' },
+  { code:'BNE', label:'BNE — Brisbane, Austrália',                city:'Brisbane',             region:'Oceania' },
+  { code:'PER', label:'PER — Perth, Austrália',                   city:'Perth',                region:'Oceania' },
+  { code:'ADL', label:'ADL — Adelaide, Austrália',                city:'Adelaide',             region:'Oceania' },
+  { code:'OOL', label:'OOL — Gold Coast, Austrália',              city:'Gold Coast',           region:'Oceania' },
+  { code:'AKL', label:'AKL — Auckland, Nova Zelândia',            city:'Auckland',             region:'Oceania' },
+  { code:'WLG', label:'WLG — Wellington, Nova Zelândia',          city:'Wellington',           region:'Oceania' },
+  { code:'CHC', label:'CHC — Christchurch, Nova Zelândia',        city:'Christchurch',         region:'Oceania' },
+  { code:'NAN', label:'NAN — Nadi, Fiji',                         city:'Nadi',                 region:'Oceania' },
+  { code:'PPT', label:'PPT — Papeete / Taiti, Polinésia Francesa',city:'Papeete',              region:'Oceania' },
 ];
 
 // ─── DADOS ────────────────────────────────────────────────────────────────────
@@ -824,7 +1065,10 @@ function createAirportAC(containerId, defaultCode) {
       dropdown.innerHTML = list.map((a, i) =>
         `<div class="ac-item" data-code="${a.code}" data-idx="${i}">
           <span class="ac-code">${highlight(a.code, q)}</span>
-          <span class="ac-city">${highlight(a.label.split(' — ')[1] || a.city, q)}</span>
+          <span class="ac-city">
+            ${highlight(a.label.split(' — ')[1] || a.city, q)}
+            ${a.region && a.region !== 'Brasil' ? `<small style="color:var(--muted);font-size:10px;margin-left:4px;">${a.region}</small>` : ''}
+          </span>
         </div>`
       ).join('');
       dropdown.querySelectorAll('.ac-item').forEach(el => {
@@ -1141,6 +1385,53 @@ function renderCalendar() {
 function toggleImportPanel() {
   const p = document.getElementById('importPanel');
   p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+let addEventAcReady = false;
+function toggleAddEventPanel() {
+  const p = document.getElementById('addEventPanel');
+  const open = p.style.display === 'none';
+  p.style.display = open ? 'block' : 'none';
+  if (open) {
+    if (!addEventAcReady) {
+      createAirportAC('ac-new-event-airport', 'VCP');
+      lucide.createIcons({ nodes: [p] });
+      addEventAcReady = true;
+    }
+    document.getElementById('newEvName').focus();
+  }
+}
+
+function saveNewEvent() {
+  const name  = document.getElementById('newEvName').value.trim();
+  const city  = document.getElementById('newEvCity').value.trim();
+  const start = document.getElementById('newEvStart').value;
+  const end   = document.getElementById('newEvEnd').value || start;
+  const ap    = document.getElementById('ac-new-event-airport')._getCode();
+
+  if (!name)  { toast('Informe o nome do evento', 'warn'); return; }
+  if (!start) { toast('Informe a data de início', 'warn'); return; }
+  if (end && end < start) { toast('Data de fim não pode ser anterior ao início', 'warn'); return; }
+
+  const ev = {
+    id: 'e_' + Date.now(),
+    name, city: city || ap, airport: ap,
+    startDate: start, endDate: end,
+    status: 'monitoring',
+  };
+  events.push(ev);
+  renderCalendar();
+  renderMonthCalendar();
+  populateEventSelect();
+  updateBadges();
+  toast(`Evento "${name}" adicionado!`);
+
+  // Limpa o formulário
+  document.getElementById('newEvName').value  = '';
+  document.getElementById('newEvCity').value  = '';
+  document.getElementById('newEvStart').value = '';
+  document.getElementById('newEvEnd').value   = '';
+  document.getElementById('addEventPanel').style.display = 'none';
 }
 
 function removeEvent(id) {
