@@ -588,17 +588,17 @@
         <!-- Homens -->
         <div class="pax-counter">
           <span class="pax-label"><i data-lucide="user" style="width:13px;height:13px;color:#60a5fa;"></i> Homens</span>
-          <button class="pax-btn" onclick="changePax('men',-1)">−</button>
-          <span class="pax-num" id="pax-men">0</span>
           <button class="pax-btn" onclick="changePax('men',+1)">+</button>
+          <span class="pax-num" id="pax-men">0</span>
+          <button class="pax-btn" onclick="changePax('men',-1)">−</button>
         </div>
 
         <!-- Mulheres -->
         <div class="pax-counter">
           <span class="pax-label"><i data-lucide="user" style="width:13px;height:13px;color:#f472b6;"></i> Mulheres</span>
-          <button class="pax-btn" onclick="changePax('women',-1)">−</button>
-          <span class="pax-num" id="pax-women">0</span>
           <button class="pax-btn" onclick="changePax('women',+1)">+</button>
+          <span class="pax-num" id="pax-women">0</span>
+          <button class="pax-btn" onclick="changePax('women',-1)">−</button>
         </div>
 
         <!-- Resumo calculado -->
@@ -1433,8 +1433,17 @@ function renderSearchResults(results, hotels, target, origin, dest, date, checko
     const name       = h.name || '—';
     const rating     = h.overall_rating ? `${h.overall_rating}★` : '';
     const reviews    = h.reviews ? `${h.reviews.toLocaleString('pt-BR')} avaliações` : '';
-    const price      = h.rate_per_night?.lowest || h.rate_per_night?.before_taxes_fees || null;
-    const priceLabel = price ? price.replace(/[^0-9,R$\s]/g,'').trim() : null;
+    const priceRaw   = h.rate_per_night?.lowest || h.rate_per_night?.before_taxes_fees || null;
+    const priceLabel = priceRaw ? priceRaw.replace(/[^0-9,R$\s]/g,'').trim() : null;
+    // Extrai valor numérico para calcular total
+    const priceNum   = priceRaw ? parseFloat(priceRaw.replace(/[^\d,]/g,'').replace(',','.')) : null;
+    const nights     = (() => {
+      try {
+        const ms = new Date(checkout + 'T12:00:00') - new Date(date + 'T12:00:00');
+        return Math.max(1, Math.round(ms / 86400000));
+      } catch { return 1; }
+    })();
+    const totalHotel = priceNum && hotelRooms ? priceNum * hotelRooms * nights : null;
     const img        = h.images?.[0]?.thumbnail || h.thumbnail || null;
     const stars      = h.hotel_class ? '★'.repeat(Math.min(5, parseInt(h.hotel_class)||0)) : '';
     const amenities  = (h.amenities||[]).slice(0,4).join(' · ');
@@ -1453,7 +1462,12 @@ function renderSearchResults(results, hotels, target, origin, dest, date, checko
         ${amenities ? `<div style="font-size:11px;color:var(--muted);margin-top:5px;">${amenities}</div>` : ''}
       </div>
       <div style="text-align:right;min-width:100px;">
-        ${priceLabel ? `<div style="font-size:17px;font-weight:900;">${priceLabel}</div><div style="font-size:11px;color:var(--muted);">por noite</div>` : '<div style="font-size:12px;color:var(--muted);">Ver preço</div>'}
+        ${priceLabel ? `
+          <div style="font-size:18px;font-weight:900;">${priceLabel}</div>
+          <div style="font-size:11px;color:var(--muted);">por noite · ${hotelRooms} quarto${hotelRooms>1?'s':''}</div>
+          ${totalHotel ? `<div style="font-size:12px;font-weight:700;color:var(--accent);margin-top:3px;">${fmtBRL(totalHotel)} total</div>
+          <div style="font-size:11px;color:var(--muted);">${nights} noite${nights>1?'s':''} × ${hotelRooms} quarto${hotelRooms>1?'s':''}</div>` : ''}
+        ` : '<div style="font-size:12px;color:var(--muted);">Ver preço</div>'}
       </div>
       <a href="${link}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;flex-shrink:0;">
         <i data-lucide="external-link"></i> Ver hotel
