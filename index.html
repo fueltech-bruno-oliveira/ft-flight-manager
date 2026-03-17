@@ -300,6 +300,12 @@
   .flight-card:hover { border-color: rgba(91,110,245,.4); }
   .flight-card.cheap { border-color: var(--green); background: rgba(16,185,129,.04); }
 
+  /* ── HOTEL CARDS ─────────────────────────────────────── */
+  .hotel-img {
+    width: 80px; height: 80px; object-fit: cover;
+    border-radius: 10px; flex-shrink: 0;
+  }
+
   /* ── ALERT CARDS ──────────────────────────────────────── */
   .alert-card {
     background: var(--surface2); border: 1px solid var(--border);
@@ -475,7 +481,7 @@
   <div class="page animate-in" id="page-busca">
     <div class="card">
       <div class="card-title" style="margin-bottom:16px;">
-        <i data-lucide="plane"></i> Buscar Passagens — POA → Destino
+        <i data-lucide="plane"></i> Buscar Passagens e Hotéis
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -485,38 +491,28 @@
           </select>
         </div>
         <div class="form-group">
-          <label>Destino (IATA)</label>
-          <select id="selDest">
-            <option value="VCP">VCP — Campinas, SP</option>
-            <option value="GRU">GRU — Guarulhos, SP</option>
-            <option value="CGH">CGH — Congonhas, SP</option>
-            <option value="FLN">FLN — Florianópolis, SC</option>
-            <option value="BSB">BSB — Brasília, DF</option>
-            <option value="GIG">GIG — Galeão, RJ</option>
-            <option value="SDU">SDU — Santos Dumont, RJ</option>
-            <option value="FOR">FOR — Fortaleza, CE</option>
-            <option value="SSA">SSA — Salvador, BA</option>
-            <option value="REC">REC — Recife, PE</option>
-            <option value="CWB">CWB — Curitiba, PR</option>
-            <option value="CNF">CNF — Confins, MG</option>
-            <option value="POA">POA — Porto Alegre, RS</option>
-          </select>
+          <label>Partida (Origem)</label>
+          <select id="selOrigin"></select>
+        </div>
+        <div class="form-group">
+          <label>Destino</label>
+          <select id="selDest"></select>
         </div>
         <div class="form-group">
           <label>Data de Ida</label>
           <input type="date" id="selDate">
         </div>
         <div class="form-group">
-          <label>Data de Volta</label>
+          <label>Data de Volta / Check-out</label>
           <input type="date" id="selReturn">
         </div>
         <div class="form-group">
           <label>Preço alvo / pessoa (R$)</label>
           <input type="number" id="targetPrice" placeholder="Ex: 600">
         </div>
-        <div class="form-group" style="display:flex;align-items:flex-end;">
-          <button class="btn btn-primary" style="width:100%;padding:10px;" onclick="searchFlights()">
-            <i data-lucide="search"></i> Buscar Voos
+        <div class="form-group" style="display:flex;align-items:flex-end;gap:8px;">
+          <button class="btn btn-primary" style="flex:1;padding:10px;" onclick="searchFlights()">
+            <i data-lucide="search"></i> Buscar Voos + Hotéis
           </button>
         </div>
       </div>
@@ -570,6 +566,53 @@
 <div id="toast"></div>
 
 <script>
+// ─── AEROPORTOS ───────────────────────────────────────────────────────────────
+const AIRPORTS = [
+  { code:'POA', label:'POA — Porto Alegre, RS',                  city:'Porto Alegre'       },
+  { code:'VCP', label:'VCP — Campinas / Viracopos, SP',          city:'Campinas'            },
+  { code:'GRU', label:'GRU — São Paulo / Guarulhos, SP',         city:'São Paulo'           },
+  { code:'CGH', label:'CGH — São Paulo / Congonhas, SP',         city:'São Paulo'           },
+  { code:'BSB', label:'BSB — Brasília, DF',                      city:'Brasília'            },
+  { code:'GIG', label:'GIG — Rio de Janeiro / Galeão, RJ',       city:'Rio de Janeiro'      },
+  { code:'SDU', label:'SDU — Rio de Janeiro / Santos Dumont, RJ',city:'Rio de Janeiro'      },
+  { code:'CNF', label:'CNF — Belo Horizonte / Confins, MG',      city:'Belo Horizonte'      },
+  { code:'CWB', label:'CWB — Curitiba, PR',                      city:'Curitiba'            },
+  { code:'FLN', label:'FLN — Florianópolis, SC',                 city:'Florianópolis'       },
+  { code:'NVT', label:'NVT — Navegantes / Balneário Camboriú, SC',city:'Navegantes'         },
+  { code:'JOI', label:'JOI — Joinville, SC',                     city:'Joinville'           },
+  { code:'XAP', label:'XAP — Chapecó, SC',                       city:'Chapecó'             },
+  { code:'SSA', label:'SSA — Salvador, BA',                      city:'Salvador'            },
+  { code:'BPS', label:'BPS — Porto Seguro, BA',                  city:'Porto Seguro'        },
+  { code:'IOS', label:'IOS — Ilhéus, BA',                        city:'Ilhéus'              },
+  { code:'REC', label:'REC — Recife, PE',                        city:'Recife'              },
+  { code:'FOR', label:'FOR — Fortaleza, CE',                     city:'Fortaleza'           },
+  { code:'NAT', label:'NAT — Natal, RN',                         city:'Natal'               },
+  { code:'JPA', label:'JPA — João Pessoa, PB',                   city:'João Pessoa'         },
+  { code:'MCZ', label:'MCZ — Maceió, AL',                        city:'Maceió'              },
+  { code:'AJU', label:'AJU — Aracaju, SE',                       city:'Aracaju'             },
+  { code:'THE', label:'THE — Teresina, PI',                      city:'Teresina'            },
+  { code:'SLZ', label:'SLZ — São Luís, MA',                      city:'São Luís'            },
+  { code:'BEL', label:'BEL — Belém, PA',                         city:'Belém'               },
+  { code:'MAO', label:'MAO — Manaus, AM',                        city:'Manaus'              },
+  { code:'PVH', label:'PVH — Porto Velho, RO',                   city:'Porto Velho'         },
+  { code:'RBR', label:'RBR — Rio Branco, AC',                    city:'Rio Branco'          },
+  { code:'BVB', label:'BVB — Boa Vista, RR',                     city:'Boa Vista'           },
+  { code:'MCP', label:'MCP — Macapá, AP',                        city:'Macapá'              },
+  { code:'PMW', label:'PMW — Palmas, TO',                        city:'Palmas'              },
+  { code:'GYN', label:'GYN — Goiânia, GO',                       city:'Goiânia'             },
+  { code:'CGB', label:'CGB — Cuiabá, MT',                        city:'Cuiabá'              },
+  { code:'CGR', label:'CGR — Campo Grande, MS',                  city:'Campo Grande'        },
+  { code:'VIX', label:'VIX — Vitória, ES',                       city:'Vitória'             },
+  { code:'UDI', label:'UDI — Uberlândia, MG',                    city:'Uberlândia'          },
+  { code:'RAO', label:'RAO — Ribeirão Preto, SP',                city:'Ribeirão Preto'      },
+  { code:'SJK', label:'SJK — São José dos Campos, SP',           city:'São José dos Campos' },
+  { code:'LDB', label:'LDB — Londrina, PR',                      city:'Londrina'            },
+  { code:'IGU', label:'IGU — Foz do Iguaçu, PR',                 city:'Foz do Iguaçu'       },
+  { code:'CFB', label:'CFB — Cabo Frio, RJ',                     city:'Cabo Frio'           },
+  { code:'FEN', label:'FEN — Fernando de Noronha, PE',           city:'Fernando de Noronha' },
+  { code:'PPB', label:'PPB — Presidente Prudente, SP',           city:'Presidente Prudente' },
+];
+
 // ─── DADOS ────────────────────────────────────────────────────────────────────
 let events = [
   { id:'e1',  name:'SPID Cup Pré-Stage',          city:'Itatiba / Campinas, SP',             airport:'VCP', startDate:'2026-02-14', endDate:'2026-02-16', status:'monitoring' },
@@ -598,6 +641,7 @@ let calViewDate = new Date();
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.onload = async () => {
   lucide.createIcons();
+  populateAirportSelects();
   renderMonthCalendar();
   renderCalendar();
   populateEventSelect();
@@ -606,6 +650,15 @@ window.onload = async () => {
   updateBadges();
   await checkProxy();
 };
+
+function populateAirportSelects() {
+  const opts = AIRPORTS.map(a => `<option value="${a.code}">${a.label}</option>`).join('');
+  document.getElementById('selOrigin').innerHTML = opts;
+  document.getElementById('selDest').innerHTML   = opts;
+  // Defaults: origin=POA, dest=VCP
+  document.getElementById('selOrigin').value = 'POA';
+  document.getElementById('selDest').value   = 'VCP';
+}
 
 // ─── PROXY ────────────────────────────────────────────────────────────────────
 async function checkProxy() {
@@ -923,60 +976,93 @@ function fillFromEvent() {
   document.getElementById('selDest').value   = ev.airport;
   document.getElementById('selDate').value   = ev.startDate;
   document.getElementById('selReturn').value = ev.endDate;
+  // Mantém origem atual; se for o mesmo aeroporto do evento, troca para POA
+  const origin = document.getElementById('selOrigin').value;
+  if (origin === ev.airport) document.getElementById('selOrigin').value = 'POA';
 }
 
 // ─── BUSCA DE VOOS ────────────────────────────────────────────────────────────
 async function searchFlights() {
+  const origin  = document.getElementById('selOrigin').value;
   const dest    = document.getElementById('selDest').value;
   const date    = document.getElementById('selDate').value;
   const retDate = document.getElementById('selReturn').value;
   const target  = parseFloat(document.getElementById('targetPrice').value) || null;
   const eventId = document.getElementById('selEvent').value;
 
-  if (!dest) { toast('Selecione o aeroporto de destino', 'warn'); return; }
-  if (!date) { toast('Selecione a data de ida', 'warn'); return; }
+  if (!origin) { toast('Selecione o aeroporto de origem', 'warn'); return; }
+  if (!dest)   { toast('Selecione o aeroporto de destino', 'warn'); return; }
+  if (origin === dest) { toast('Origem e destino não podem ser iguais', 'warn'); return; }
+  if (!date)   { toast('Selecione a data de ida', 'warn'); return; }
+
+  const destInfo   = AIRPORTS.find(a => a.code === dest)   || { city: dest };
+  const originInfo = AIRPORTS.find(a => a.code === origin) || { city: origin };
 
   const el = document.getElementById('flightResults');
   el.innerHTML = `<div class="card" style="text-align:center;padding:52px;">
-    <div class="spinner" style="font-size:36px;">✈️</div>
-    <p style="margin-top:16px;font-weight:600;">Consultando Google Flights via SerpAPI…</p>
-    <p style="font-size:12px;color:var(--muted);margin-top:4px;">POA → ${dest} · ${date}</p>
+    <div class="spinner" style="font-size:32px;"><i data-lucide="loader-2" style="width:36px;height:36px;color:var(--accent);"></i></div>
+    <p style="margin-top:16px;font-weight:600;">Buscando voos e hotéis via SerpAPI…</p>
+    <p style="font-size:12px;color:var(--muted);margin-top:4px;">${origin} → ${dest} · ${date}</p>
   </div>`;
+  lucide.createIcons();
 
   try {
-    const isRound = retDate && retDate > date;
-    const params  = new URLSearchParams({ engine:'google_flights', departure_id:'POA', arrival_id:dest, outbound_date:date, currency:'BRL', hl:'pt', gl:'br', type: isRound ? '1' : '2' });
-    if (isRound) params.set('return_date', retDate);
+    const isRound    = retDate && retDate > date;
+    const flightParams = new URLSearchParams({
+      engine:'google_flights', departure_id:origin, arrival_id:dest,
+      outbound_date:date, currency:'BRL', hl:'pt', gl:'br',
+      type: isRound ? '1' : '2',
+    });
+    if (isRound) flightParams.set('return_date', retDate);
 
-    const resp = await fetch(`/api/flights?${params}`);
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
+    const hotelCheckout = retDate && retDate > date ? retDate : (() => {
+      const d = new Date(date + 'T12:00:00'); d.setDate(d.getDate() + 1);
+      return d.toISOString().split('T')[0];
+    })();
+    const hotelParams = new URLSearchParams({
+      engine:'google_hotels', q:`hotéis em ${destInfo.city}`,
+      check_in_date:date, check_out_date:hotelCheckout,
+      currency:'BRL', hl:'pt', gl:'br', sort_by:'3',
+    });
 
-    const results     = [...(data.best_flights||[]), ...(data.other_flights||[])];
-    const gFlightsUrl = data.search_metadata?.google_flights_url || '';
-    const tfsMatch    = gFlightsUrl.match(/[?&]tfs=([^&]+)/);
-    const baseTfs     = tfsMatch ? tfsMatch[1] : '';
+    // Fetch voos e hotéis em paralelo
+    const [flightResp, hotelResp] = await Promise.allSettled([
+      fetch(`/api/flights?${flightParams}`),
+      fetch(`/api/flights?${hotelParams}`),
+    ]);
 
-    if (!results.length) {
-      el.innerHTML = `<div class="card"><div class="empty"><i data-lucide="search-x"></i><p>Nenhum voo encontrado.<br><small>Tente datas diferentes ou aeroporto alternativo.</small></p></div></div>`;
+    const flightData = flightResp.status === 'fulfilled' ? await flightResp.value.json() : {};
+    const hotelData  = hotelResp.status  === 'fulfilled' ? await hotelResp.value.json()  : {};
+
+    if (flightData.error) throw new Error(flightData.error);
+
+    const results    = [...(flightData.best_flights||[]), ...(flightData.other_flights||[])];
+    const hotels     = hotelData.properties || [];
+    const gFlightsUrl = flightData.search_metadata?.google_flights_url || '';
+    const tfsMatch   = gFlightsUrl.match(/[?&]tfs=([^&]+)/);
+    const baseTfs    = tfsMatch ? tfsMatch[1] : '';
+
+    if (!results.length && !hotels.length) {
+      el.innerHTML = `<div class="card"><div class="empty">
+        <i data-lucide="search-x"></i>
+        <p>Nenhum resultado encontrado.<br><small>Tente datas diferentes ou aeroporto alternativo.</small></p>
+      </div></div>`;
       lucide.createIcons(); return;
     }
     if (eventId) {
       const ev = events.find(e => e.id === eventId);
       if (ev && ev.status === 'searching') { ev.status = 'monitoring'; renderCalendar(); renderMonthCalendar(); }
     }
-    renderFlightResults(results, target, dest, date, eventId, baseTfs, gFlightsUrl);
+    renderSearchResults(results, hotels, target, origin, dest, date, hotelCheckout, destInfo.city, eventId, baseTfs, gFlightsUrl);
   } catch(err) {
     el.innerHTML = `<div class="card"><div class="empty"><i data-lucide="alert-circle"></i>
       <p style="color:var(--red);font-weight:600;">${err.message}</p>
-      <p style="font-size:12px;color:var(--muted);margin-top:8px;">Verifique a conexão com a internet.</p>
+      <p style="font-size:12px;color:var(--muted);margin-top:8px;">Verifique a API key ou a conexão.</p>
     </div></div>`;
     lucide.createIcons();
     toast(err.message, 'err');
   }
 }
-
-const AIRLINE_EMOJI = { 'LATAM':'🔴','Gol':'🟠','GOL':'🟠','Azul':'🔵' };
 
 function buildBookingUrl(bookingToken, baseTfs) {
   if (bookingToken && baseTfs) return `https://www.google.com/travel/flights?hl=pt&gl=br&curr=BRL&tfs=${baseTfs}&selectedoffer=${encodeURIComponent(bookingToken)}`;
@@ -984,18 +1070,20 @@ function buildBookingUrl(bookingToken, baseTfs) {
   return null;
 }
 
-function renderFlightResults(results, target, dest, date, eventId, baseTfs, gFlightsUrl) {
-  const el    = document.getElementById('flightResults');
-  const cards = results.slice(0, 12).map((f, idx) => {
+function renderSearchResults(results, hotels, target, origin, dest, date, checkout, destCity, eventId, baseTfs, gFlightsUrl) {
+  const el = document.getElementById('flightResults');
+
+  // ── VOOS ────
+  const flightCards = results.slice(0, 12).map((f, idx) => {
     const price       = f.price || 0;
     const flights     = f.flights || [];
     const airline     = flights[0]?.airline || '—';
     const flightNums  = flights.map(fl => fl.flight_number).filter(Boolean).join(' + ');
     const airlineLogo = flights[0]?.airline_logo || f.airline_logo || '';
-    const dep         = flights[0]?.departure_airport?.time?.slice(11) || '—';
-    const depDate     = flights[0]?.departure_airport?.time?.slice(0,10) || date;
-    const arr         = flights[flights.length-1]?.arrival_airport?.time?.slice(11) || '—';
-    const arrDate     = flights[flights.length-1]?.arrival_airport?.time?.slice(0,10) || date;
+    const dep         = flights[0]?.departure_airport?.time?.slice(11,16) || '—';
+    const depDate     = flights[0]?.departure_airport?.time?.slice(0,10)  || date;
+    const arr         = flights[flights.length-1]?.arrival_airport?.time?.slice(11,16) || '—';
+    const arrDate     = flights[flights.length-1]?.arrival_airport?.time?.slice(0,10)  || date;
     const dur         = f.total_duration ? `${Math.floor(f.total_duration/60)}h${String(f.total_duration%60).padStart(2,'0')}m` : '—';
     const stops       = (f.layovers||[]).length;
     const cheap       = target && price > 0 && price <= target;
@@ -1008,7 +1096,7 @@ function renderFlightResults(results, target, dest, date, eventId, baseTfs, gFli
       <div style="display:flex;align-items:center;gap:10px;min-width:130px;">
         ${airlineLogo
           ? `<img src="${airlineLogo}" style="width:36px;height:36px;object-fit:contain;border-radius:8px;background:#fff;padding:2px;" onerror="this.style.display='none'">`
-          : `<span style="font-size:24px;">${AIRLINE_EMOJI[airline]||'✈️'}</span>`}
+          : `<span style="width:36px;height:36px;border-radius:8px;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:18px;">✈</span>`}
         <div>
           <div style="font-weight:700;font-size:13px;">${airline}${bestBadge}</div>
           ${flightNums ? `<div style="font-size:11px;color:var(--muted);font-family:monospace;">${flightNums}</div>` : ''}
@@ -1019,12 +1107,12 @@ function renderFlightResults(results, target, dest, date, eventId, baseTfs, gFli
         <div style="display:flex;align-items:center;gap:10px;">
           <div style="text-align:center;">
             <div style="font-size:20px;font-weight:800;letter-spacing:-1px;">${dep}</div>
-            <div style="font-size:11px;color:var(--muted);">POA</div>
+            <div style="font-size:11px;color:var(--muted);">${origin}</div>
           </div>
           <div style="flex:1;text-align:center;">
             <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">${dur}</div>
             <div style="height:1px;background:var(--border);position:relative;">
-              <span style="position:absolute;top:-5px;left:50%;transform:translateX(-50%);font-size:10px;">✈</span>
+              <span style="position:absolute;top:-5px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--muted);">›</span>
             </div>
             <div style="font-size:11px;margin-top:4px;color:${stops===0?'var(--green)':'var(--yellow)'};">${stops===0?'Direto':stops+' escala'+(stops>1?'s':'')}</div>
           </div>
@@ -1043,34 +1131,91 @@ function renderFlightResults(results, target, dest, date, eventId, baseTfs, gFli
         ${target && price ? `<div style="font-size:11px;font-weight:600;color:${cheap?'var(--green)':'var(--muted)'};">${cheap ? `↓ ${fmtBRL(target-price)} abaixo` : `↑ ${fmtBRL(price-target)} acima`}</div>` : ''}
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:6px;min-width:140px;">
+      <div style="display:flex;flex-direction:column;gap:6px;min-width:130px;">
         <a href="${bookingUrl || gFlightsUrl || 'https://www.google.com/travel/flights'}" target="_blank" rel="noopener"
-           class="btn btn-success" style="text-decoration:none;">
-          <i data-lucide="shopping-cart" style="width:13px;height:13px;"></i> Comprar
+           class="btn btn-success btn-sm" style="text-decoration:none;">
+          <i data-lucide="shopping-cart"></i> Comprar
         </a>
-        ${price ? `<button class="btn btn-ghost" style="font-size:12px;"
+        ${price ? `<button class="btn btn-ghost btn-sm"
             onclick="createAlert('${airline.replace(/'/g,'`')}','${dest}','${depDate}','${price}','${target||price}','${eventId||''}')">
-            <i data-lucide="bell-plus" style="width:13px;height:13px;"></i> Criar Alerta
+            <i data-lucide="bell-plus"></i> Criar Alerta
           </button>` : ''}
       </div>
     </div>`;
   }).join('');
 
-  el.innerHTML = `<div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:12px;">
-      <div>
-        <div style="font-weight:700;font-size:15px;">POA → ${dest} · ${fmtDate(date)}</div>
-        <div style="font-size:12px;color:var(--muted);">${results.length} voos encontrados</div>
+  // ── HOTÉIS ────
+  const hotelCards = hotels.slice(0, 8).map((h, idx) => {
+    const name       = h.name || '—';
+    const rating     = h.overall_rating ? `${h.overall_rating}★` : '';
+    const reviews    = h.reviews ? `${h.reviews.toLocaleString('pt-BR')} avaliações` : '';
+    const price      = h.rate_per_night?.lowest || h.rate_per_night?.before_taxes_fees || null;
+    const priceLabel = price ? price.replace(/[^0-9,R$\s]/g,'').trim() : null;
+    const img        = h.images?.[0]?.thumbnail || h.thumbnail || null;
+    const stars      = h.hotel_class ? '★'.repeat(Math.min(5, parseInt(h.hotel_class)||0)) : '';
+    const amenities  = (h.amenities||[]).slice(0,4).join(' · ');
+    const link       = h.link || `https://www.google.com/travel/hotels?q=${encodeURIComponent(name + ' ' + destCity)}&hl=pt&gl=br&curr=BRL`;
+    const bestBadge  = idx === 0 ? `<span style="background:rgba(16,185,129,.15);color:var(--green);padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;margin-left:6px;">Destaque</span>` : '';
+
+    return `<div class="flight-card" style="align-items:flex-start;">
+      ${img ? `<img src="${img}" style="width:80px;height:80px;object-fit:cover;border-radius:10px;flex-shrink:0;" onerror="this.style.display='none'">` : `<div style="width:80px;height:80px;border-radius:10px;background:var(--surface3);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i data-lucide="building-2" style="width:28px;height:28px;color:var(--muted);"></i></div>`}
+      <div style="flex:1;min-width:160px;">
+        <div style="font-weight:700;font-size:14px;">${name}${bestBadge}</div>
+        ${stars ? `<div style="font-size:12px;color:var(--yellow);letter-spacing:1px;">${stars}</div>` : ''}
+        ${rating ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:4px;">
+          <i data-lucide="star" style="width:11px;height:11px;color:var(--yellow);fill:var(--yellow);"></i>
+          <strong style="color:var(--text);">${rating}</strong> ${reviews}
+        </div>` : ''}
+        ${amenities ? `<div style="font-size:11px;color:var(--muted);margin-top:5px;">${amenities}</div>` : ''}
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        ${target ? `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:7px 14px;font-size:13px;">🎯 Alvo: <strong>${fmtBRL(target)}</strong></div>` : ''}
-        ${gFlightsUrl ? `<a href="${gFlightsUrl}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">
-            <i data-lucide="external-link" style="width:13px;height:13px;"></i> Google Flights
+      <div style="text-align:right;min-width:100px;">
+        ${priceLabel ? `<div style="font-size:17px;font-weight:900;">${priceLabel}</div><div style="font-size:11px;color:var(--muted);">por noite</div>` : '<div style="font-size:12px;color:var(--muted);">Ver preço</div>'}
+      </div>
+      <a href="${link}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;flex-shrink:0;">
+        <i data-lucide="external-link"></i> Ver hotel
+      </a>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;">
+            <i data-lucide="plane" style="width:16px;height:16px;color:var(--accent);"></i>
+            ${origin} → ${dest} · ${fmtDate(date)}
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">${results.length} voos encontrados</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          ${target ? `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:6px 12px;font-size:13px;display:flex;align-items:center;gap:6px;">
+            <i data-lucide="target" style="width:13px;height:13px;color:var(--accent);"></i> <strong>${fmtBRL(target)}</strong>
+          </div>` : ''}
+          ${gFlightsUrl ? `<a href="${gFlightsUrl}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;">
+            <i data-lucide="external-link"></i> Google Flights
           </a>` : ''}
+        </div>
       </div>
+      ${flightCards || `<div class="empty" style="padding:32px;"><i data-lucide="plane-landing"></i><p>Nenhum voo encontrado para esta rota e data.</p></div>`}
     </div>
-    ${cards}
-  </div>`;
+
+    ${hotels.length ? `
+    <div class="card" style="margin-bottom:0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;">
+            <i data-lucide="building-2" style="width:16px;height:16px;color:var(--accent);"></i>
+            Hotéis em ${destCity}
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">${fmtDate(date)} → ${fmtDate(checkout)} · ${hotels.length} opções encontradas</div>
+        </div>
+        <a href="https://www.google.com/travel/hotels?q=hoteis+em+${encodeURIComponent(destCity)}&hl=pt&gl=br&curr=BRL" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;">
+          <i data-lucide="external-link"></i> Google Hotels
+        </a>
+      </div>
+      ${hotelCards}
+    </div>` : ''}
+  `;
   lucide.createIcons();
 }
 
