@@ -505,8 +505,8 @@
           <button class="btn btn-primary btn-sm" onclick="toggleAddEventPanel()">
             <i data-lucide="plus"></i> Adicionar Evento
           </button>
-          <button class="btn btn-ghost btn-sm" id="btnHideExpired" onclick="toggleHideExpired()">
-            <i data-lucide="eye-off"></i> Ocultar encerrados
+          <button class="btn btn-ghost btn-sm" id="btnHideExpired" onclick="toggleHideExpired()" style="color:var(--accent);border-color:var(--accent);">
+            <i data-lucide="eye"></i> Mostrar encerrados
           </button>
           <button class="btn btn-ghost btn-sm" onclick="toggleImportPanel()">
             <i data-lucide="upload"></i> Importar XLSX
@@ -1308,13 +1308,13 @@ function toggleHideExpired() {
   hideExpired = !hideExpired;
   const btn = document.getElementById('btnHideExpired');
   if (hideExpired) {
-    btn.innerHTML = '<i data-lucide="eye-off"></i> Ocultar encerrados';
-    btn.style.color = '';
-    btn.style.borderColor = '';
-  } else {
     btn.innerHTML = '<i data-lucide="eye"></i> Mostrar encerrados';
     btn.style.color = 'var(--accent)';
     btn.style.borderColor = 'var(--accent)';
+  } else {
+    btn.innerHTML = '<i data-lucide="eye-off"></i> Ocultar encerrados';
+    btn.style.color = '';
+    btn.style.borderColor = '';
   }
   lucide.createIcons({ nodes: [btn] });
   renderCalendar();
@@ -1549,7 +1549,7 @@ async function searchFlights() {
   const dest    = document.getElementById('ac-dest')._getCode();
   const date    = document.getElementById('selDate').value;
   const retDate = document.getElementById('selReturn').value;
-  const target  = parseFloat(document.getElementById('targetPrice').value) || null;
+  const target  = null;
   const eventId = document.getElementById('selEvent').value;
 
   if (!origin) { toast('Selecione o aeroporto de origem', 'warn'); return; }
