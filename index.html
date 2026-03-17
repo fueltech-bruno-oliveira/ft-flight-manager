@@ -300,6 +300,46 @@
   .flight-card:hover { border-color: rgba(91,110,245,.4); }
   .flight-card.cheap { border-color: var(--green); background: rgba(16,185,129,.04); }
 
+  /* ── AUTOCOMPLETE ────────────────────────────────────── */
+  .ac-wrap { position: relative; }
+  .ac-input {
+    width: 100%; padding: 9px 32px 9px 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 9px; color: var(--text); font-size: 13px; outline: none;
+    transition: border-color .15s; cursor: text;
+  }
+  .ac-input:focus { border-color: var(--accent); }
+  .ac-arrow {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    pointer-events: none; color: var(--muted); width: 14px; height: 14px;
+    transition: transform .15s;
+  }
+  .ac-wrap.open .ac-arrow { transform: translateY(-50%) rotate(180deg); }
+  .ac-dropdown {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 500;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,.6);
+    max-height: 260px; overflow-y: auto;
+    display: none;
+  }
+  .ac-wrap.open .ac-dropdown { display: block; }
+  .ac-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px; cursor: pointer; transition: background .1s;
+    font-size: 13px;
+  }
+  .ac-item:hover, .ac-item.focused { background: var(--surface2); }
+  .ac-item .ac-code {
+    font-family: monospace; font-size: 12px; font-weight: 800;
+    color: var(--accent); background: rgba(91,110,245,.1);
+    padding: 2px 6px; border-radius: 5px; flex-shrink: 0; min-width: 38px;
+    text-align: center;
+  }
+  .ac-item .ac-city { flex: 1; color: var(--text); }
+  .ac-item .ac-city em { font-style: normal; color: var(--accent); font-weight: 700; }
+  .ac-empty { padding: 14px; text-align: center; color: var(--muted); font-size: 13px; }
+
   /* ── HOTEL CARDS ─────────────────────────────────────── */
   .hotel-img {
     width: 80px; height: 80px; object-fit: cover;
@@ -492,11 +532,11 @@
         </div>
         <div class="form-group">
           <label>Partida (Origem)</label>
-          <select id="selOrigin"></select>
+          <div class="ac-wrap" id="ac-origin"></div>
         </div>
         <div class="form-group">
           <label>Destino</label>
-          <select id="selDest"></select>
+          <div class="ac-wrap" id="ac-dest"></div>
         </div>
         <div class="form-group">
           <label>Data de Ida</label>
@@ -651,13 +691,129 @@ window.onload = async () => {
   await checkProxy();
 };
 
+// ─── AUTOCOMPLETE AEROPORTO ───────────────────────────────────────────────────
+function createAirportAC(containerId, defaultCode) {
+  const container  = document.getElementById(containerId);
+  const defaultAP  = AIRPORTS.find(a => a.code === defaultCode) || AIRPORTS[0];
+
+  container.innerHTML = `
+    <input class="ac-input" type="text" autocomplete="off" spellcheck="false"
+      placeholder="Cidade ou código IATA…" value="${defaultAP.label}">
+    <svg class="ac-arrow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+    <div class="ac-dropdown"></div>
+  `;
+
+  const input    = container.querySelector('.ac-input');
+  const dropdown = container.querySelector('.ac-dropdown');
+  let selected   = defaultAP;
+  let focusIdx   = -1;
+
+  function highlight(text, query) {
+    if (!query) return text;
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return text;
+    return text.slice(0, idx) + `<em>${text.slice(idx, idx + query.length)}</em>` + text.slice(idx + query.length);
+  }
+
+  function renderDropdown(query) {
+    const q = (query || '').trim().toLowerCase();
+    const list = q
+      ? AIRPORTS.filter(a =>
+          a.code.toLowerCase().includes(q) ||
+          a.city.toLowerCase().includes(q) ||
+          a.label.toLowerCase().includes(q)
+        )
+      : AIRPORTS;
+
+    focusIdx = -1;
+    if (!list.length) {
+      dropdown.innerHTML = `<div class="ac-empty">Nenhum aeroporto encontrado</div>`;
+    } else {
+      dropdown.innerHTML = list.map((a, i) =>
+        `<div class="ac-item" data-code="${a.code}" data-idx="${i}">
+          <span class="ac-code">${highlight(a.code, q)}</span>
+          <span class="ac-city">${highlight(a.label.split(' — ')[1] || a.city, q)}</span>
+        </div>`
+      ).join('');
+      dropdown.querySelectorAll('.ac-item').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          selectAirport(AIRPORTS.find(a => a.code === el.dataset.code));
+        });
+      });
+    }
+  }
+
+  function selectAirport(ap) {
+    selected       = ap;
+    input.value    = ap.label;
+    container.classList.remove('open');
+    input.blur();
+  }
+
+  function open() {
+    container.classList.add('open');
+    renderDropdown(input.value === selected?.label ? '' : input.value);
+    // Scroll to current selection
+    const cur = dropdown.querySelector(`[data-code="${selected?.code}"]`);
+    if (cur) cur.scrollIntoView({ block:'nearest' });
+  }
+
+  input.addEventListener('focus', () => {
+    input.select();
+    open();
+  });
+  input.addEventListener('input', () => {
+    container.classList.add('open');
+    renderDropdown(input.value);
+  });
+  input.addEventListener('keydown', e => {
+    const items = dropdown.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusIdx = Math.min(focusIdx + 1, items.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusIdx = Math.max(focusIdx - 1, 0);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (focusIdx >= 0 && items[focusIdx]) {
+        const code = items[focusIdx].dataset.code;
+        selectAirport(AIRPORTS.find(a => a.code === code));
+      }
+      return;
+    } else if (e.key === 'Escape') {
+      input.value = selected?.label || '';
+      container.classList.remove('open');
+      return;
+    } else { return; }
+    items.forEach((el, i) => el.classList.toggle('focused', i === focusIdx));
+    if (items[focusIdx]) items[focusIdx].scrollIntoView({ block:'nearest' });
+  });
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      container.classList.remove('open');
+      // Restaura texto válido se o usuário apagou sem selecionar
+      if (!AIRPORTS.find(a => a.label === input.value)) {
+        input.value = selected?.label || '';
+      }
+    }, 150);
+  });
+
+  // Expõe getter do código selecionado no container
+  container._getCode = () => selected?.code || null;
+  container._setCode = code => {
+    const ap = AIRPORTS.find(a => a.code === code);
+    if (ap) selectAirport(ap);
+  };
+}
+
 function populateAirportSelects() {
-  const opts = AIRPORTS.map(a => `<option value="${a.code}">${a.label}</option>`).join('');
-  document.getElementById('selOrigin').innerHTML = opts;
-  document.getElementById('selDest').innerHTML   = opts;
-  // Defaults: origin=POA, dest=VCP
-  document.getElementById('selOrigin').value = 'POA';
-  document.getElementById('selDest').value   = 'VCP';
+  createAirportAC('ac-origin', 'POA');
+  createAirportAC('ac-dest',   'VCP');
 }
 
 // ─── PROXY ────────────────────────────────────────────────────────────────────
@@ -973,18 +1129,18 @@ function fillFromEvent() {
   const id = document.getElementById('selEvent').value;
   const ev = events.find(e => e.id === id);
   if (!ev) return;
-  document.getElementById('selDest').value   = ev.airport;
+  document.getElementById('ac-dest')._setCode(ev.airport);
   document.getElementById('selDate').value   = ev.startDate;
   document.getElementById('selReturn').value = ev.endDate;
-  // Mantém origem atual; se for o mesmo aeroporto do evento, troca para POA
-  const origin = document.getElementById('selOrigin').value;
-  if (origin === ev.airport) document.getElementById('selOrigin').value = 'POA';
+  // Se origem = destino do evento, troca para POA
+  const origin = document.getElementById('ac-origin')._getCode();
+  if (origin === ev.airport) document.getElementById('ac-origin')._setCode('POA');
 }
 
 // ─── BUSCA DE VOOS ────────────────────────────────────────────────────────────
 async function searchFlights() {
-  const origin  = document.getElementById('selOrigin').value;
-  const dest    = document.getElementById('selDest').value;
+  const origin  = document.getElementById('ac-origin')._getCode();
+  const dest    = document.getElementById('ac-dest')._getCode();
   const date    = document.getElementById('selDate').value;
   const retDate = document.getElementById('selReturn').value;
   const target  = parseFloat(document.getElementById('targetPrice').value) || null;
