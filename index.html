@@ -502,6 +502,9 @@
             <input type="text" id="searchEvents" placeholder="Filtrar eventos…" onkeyup="renderCalendar()"
               style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 12px 7px 30px;color:var(--text);font-size:13px;width:200px;outline:none;">
           </div>
+          <button class="btn btn-ghost btn-sm" id="btnHideExpired" onclick="toggleHideExpired()">
+            <i data-lucide="eye-off"></i> Ocultar encerrados
+          </button>
           <button class="btn btn-ghost btn-sm" onclick="toggleImportPanel()">
             <i data-lucide="upload"></i> Importar XLSX
           </button>
@@ -737,6 +740,7 @@ let alerts    = JSON.parse(localStorage.getItem('ft_alerts')    || '[]');
 let purchases = JSON.parse(localStorage.getItem('ft_purchases') || '[]');
 let autoTimer = null;
 let calViewDate = new Date();
+let hideExpired = true;
 let pax = { men: 0, women: 0 };
 
 function changePax(gender, delta) {
@@ -1060,11 +1064,39 @@ function calDayClick(ds) {
 }
 
 // ─── CALENDÁRIO LISTA ─────────────────────────────────────────────────────────
+function toggleHideExpired() {
+  hideExpired = !hideExpired;
+  const btn = document.getElementById('btnHideExpired');
+  if (hideExpired) {
+    btn.innerHTML = '<i data-lucide="eye-off"></i> Ocultar encerrados';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+  } else {
+    btn.innerHTML = '<i data-lucide="eye"></i> Mostrar encerrados';
+    btn.style.color = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+  }
+  lucide.createIcons({ nodes: [btn] });
+  renderCalendar();
+}
+
 function renderCalendar() {
-  const filter = (document.getElementById('searchEvents').value || '').toLowerCase();
-  const list   = events
-    .filter(e => e.name.toLowerCase().includes(filter) || e.city.toLowerCase().includes(filter))
+  const filter  = (document.getElementById('searchEvents').value || '').toLowerCase();
+  const today   = new Date().toISOString().split('T')[0];
+  const expired = events.filter(e => e.endDate < today).length;
+
+  const list = events
+    .filter(e => {
+      if (hideExpired && e.endDate < today) return false;
+      return e.name.toLowerCase().includes(filter) || e.city.toLowerCase().includes(filter);
+    })
     .sort((a,b) => a.startDate.localeCompare(b.startDate));
+
+  // Atualiza badge do botão com contagem de encerrados
+  const btn = document.getElementById('btnHideExpired');
+  if (btn && hideExpired && expired > 0) {
+    btn.title = `${expired} evento(s) encerrado(s) oculto(s)`;
+  }
 
   document.getElementById('badge-cal').textContent = events.length;
 
