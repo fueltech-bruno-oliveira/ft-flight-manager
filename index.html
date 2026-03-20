@@ -981,9 +981,8 @@ let calViewDate = new Date();
 let hideExpired = true;
 
 // ─── N8N WEBHOOKS ─────────────────────────────────────────────────────────────
-// Cole as URLs geradas pelo N8N após importar os workflows
 const N8N_EVENT_WEBHOOK = localStorage.getItem('n8n_event_url') || '';
-const N8N_ALERT_WEBHOOK = localStorage.getItem('n8n_alert_url') || '';
+const N8N_ALERT_WEBHOOK = localStorage.getItem('n8n_alert_url') || 'https://intranet.fueltech.com.br:5678/webhook-test/ft-price-alert';
 
 // Cache de último preço por evento — espelha o último registro salvo no banco
 let lastEventPrices = JSON.parse(localStorage.getItem('ft_last_prices') || '{}');
