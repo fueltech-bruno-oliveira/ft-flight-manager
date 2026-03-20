@@ -1,0 +1,144 @@
+{
+  "name": "FT — Monitoramento Automático de Passagens",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 6 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule — A cada 6h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  id,\n  name,\n  airport,\n  COALESCE(origin, 'POA') AS origin,\n  flight_date::text AS flight_date,\n  city\nFROM n8n_eventos\nWHERE active = true\n  AND flight_date >= CURRENT_DATE\n  AND airport IS NOT NULL\n  AND airport != COALESCE(origin, 'POA')\nORDER BY flight_date ASC;",
+        "options": {}
+      },
+      "id": "pg-eventos",
+      "name": "PostgreSQL — Buscar Eventos",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [460, 300],
+      "credentials": {
+        "postgres": { "name": "PostgreSQL — FuelTech" }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "options": { "timeout": 20000 },
+        "queryParameters": {
+          "parameters": [
+            { "name": "engine",        "value": "google_flights" },
+            { "name": "departure_id",  "value": "={{ $json.origin }}" },
+            { "name": "arrival_id",    "value": "={{ $json.airport }}" },
+            { "name": "outbound_date", "value": "={{ $json.flight_date.toString().slice(0,10) }}" },
+            { "name": "currency",      "value": "BRL" },
+            { "name": "hl",            "value": "pt" },
+            { "name": "gl",            "value": "br" },
+            { "name": "type",          "value": "2" },
+            { "name": "api_key",       "value": "COLE_SUA_CHAVE_SERPAPI_AQUI" }
+          ]
+        }
+      },
+      "id": "http-serp",
+      "name": "HTTP Request — SerpAPI Voos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst ev   = $('PostgreSQL — Buscar Eventos').item.json;\n\n// Extrai todos os voos e pega o mais barato\nconst all  = [...(data.best_flights || []), ...(data.other_flights || [])];\nif (!all.length) {\n  console.log(`[Monitor] Sem voos para ${ev.name} (${ev.origin} → ${ev.airport})`);\n  return [];\n}\n\nconst best = all.reduce((a, b) => (!a || b.price < a.price) ? b : a, null);\nif (!best?.price) return [];\n\nconst fl = best.flights || [];\nconst flightDate = ev.flight_date.toString().slice(0, 10);\n\nconsole.log(`[Monitor] ${ev.name}: R$ ${best.price} (${fl[0]?.airline || 'N/D'})`);\n\nreturn [{ json: {\n  evento_id:   ev.id,\n  evento_name: ev.name,\n  airline:     fl[0]?.airline || 'N/D',\n  price:       best.price,\n  dep_time:    fl[0]?.departure_airport?.time?.slice(11, 16) || '',\n  arr_time:    (fl[fl.length - 1] || fl[0])?.arrival_airport?.time?.slice(11, 16) || '',\n  stops:       (best.layovers || []).length,\n  origin:      ev.origin,\n  dest:        ev.airport,\n  flight_date: flightDate,\n}}];"
+      },
+      "id": "code-extract",
+      "name": "Code — Extrair Menor Preço",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH inserted AS (\n  INSERT INTO n8n_monitoramento\n    (evento_id, checked_at, price, airline, dep_time, arr_time, stops, triggered)\n  VALUES (\n    '{{ $json.evento_id }}',\n    NOW(),\n    {{ $json.price }},\n    '{{ $json.airline }}',\n    '{{ $json.dep_time }}',\n    '{{ $json.arr_time }}',\n    {{ $json.stops }},\n    false\n  )\n  RETURNING *\n)\nSELECT\n  i.price          AS current_price,\n  i.evento_id,\n  '{{ $json.evento_name }}' AS evento_name,\n  '{{ $json.airline }}'    AS airline,\n  '{{ $json.dep_time }}'   AS dep_time,\n  '{{ $json.arr_time }}'   AS arr_time,\n  {{ $json.stops }}        AS stops,\n  '{{ $json.origin }}'     AS origin,\n  '{{ $json.dest }}'       AS dest,\n  '{{ $json.flight_date }}' AS flight_date,\n  (\n    SELECT MIN(price)\n    FROM n8n_monitoramento\n    WHERE evento_id = i.evento_id\n      AND checked_at < NOW() - INTERVAL '30 seconds'\n  ) AS prev_min_price,\n  CASE\n    WHEN (\n      SELECT COUNT(*)\n      FROM n8n_monitoramento\n      WHERE evento_id = i.evento_id\n        AND checked_at < NOW() - INTERVAL '30 seconds'\n    ) > 0\n    AND i.price < (\n      SELECT MIN(price)\n      FROM n8n_monitoramento\n      WHERE evento_id = i.evento_id\n        AND checked_at < NOW() - INTERVAL '30 seconds'\n    )\n    THEN true\n    ELSE false\n  END AS price_dropped\nFROM inserted i;",
+        "options": {}
+      },
+      "id": "pg-save-check",
+      "name": "PostgreSQL — Salvar e Verificar",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1120, 300],
+      "credentials": {
+        "postgres": { "name": "PostgreSQL — FuelTech" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "drop-check",
+              "leftValue": "={{ $json.price_dropped }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-dropped",
+      "name": "Houve Queda de Preço?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "email@fueltech.com.br",
+        "subject": "📉 Queda de preço — {{ $json.evento_name }}",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\"><style>body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e2e8f0;margin:0;padding:0}.container{max-width:560px;margin:0 auto;background:#1a1d2e;border-radius:16px;overflow:hidden;border:1px solid #2e3250}.header{background:linear-gradient(135deg,#5b6ef5,#7c3aed);padding:28px 32px;text-align:center}.header h1{margin:0;font-size:22px;color:#fff;font-weight:800}.badge{display:inline-block;background:rgba(255,255,255,.15);color:#fff;border-radius:20px;padding:4px 14px;font-size:13px;margin-top:8px}.body{padding:32px}.alert-box{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:20px;text-align:center;margin-bottom:24px}.price{font-size:42px;font-weight:900;color:#10b981;line-height:1}.price-label{font-size:13px;color:#64748b;margin-top:4px}.prev-price{font-size:16px;color:#ef4444;text-decoration:line-through;margin-top:8px;font-weight:700}.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}.info-item{background:#242740;border-radius:10px;padding:14px;text-align:center}.info-label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:4px}.info-value{font-size:14px;font-weight:700;color:#e2e8f0}.route{font-size:18px;font-weight:800;color:#818cf8;text-align:center;margin:16px 0}.cta{display:block;background:#10b981;color:#fff;text-align:center;padding:14px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;margin-top:20px}.footer{padding:16px 32px;text-align:center;font-size:12px;color:#64748b;border-top:1px solid #2e3250}</style></head><body><div class=\"container\"><div class=\"header\"><h1>📉 Preço Mais Baixo Detectado!</h1><span class=\"badge\">FT Flight Manager · Monitoramento Automático</span></div><div class=\"body\"><div class=\"alert-box\"><div class=\"price\">R$ {{ Number($json.current_price).toLocaleString('pt-BR', {minimumFractionDigits:2}) }}</div><div class=\"price-label\">menor preço encontrado — por pessoa</div>{{ $json.prev_min_price ? '<div class=\"prev-price\">Anterior: R$ ' + Number($json.prev_min_price).toLocaleString('pt-BR', {minimumFractionDigits:2}) + '</div>' : '' }}</div><div class=\"route\">{{ $json.origin }} → {{ $json.dest }}</div><div class=\"info-grid\"><div class=\"info-item\"><div class=\"info-label\">Evento</div><div class=\"info-value\">{{ $json.evento_name }}</div></div><div class=\"info-item\"><div class=\"info-label\">Companhia</div><div class=\"info-value\">{{ $json.airline }}</div></div><div class=\"info-item\"><div class=\"info-label\">Partida</div><div class=\"info-value\">{{ $json.dep_time }}</div></div><div class=\"info-item\"><div class=\"info-label\">Chegada</div><div class=\"info-value\">{{ $json.arr_time }}</div></div><div class=\"info-item\"><div class=\"info-label\">Escalas</div><div class=\"info-value\">{{ $json.stops == 0 ? 'Direto' : $json.stops + ' escala(s)' }}</div></div><div class=\"info-item\"><div class=\"info-label\">Data do Voo</div><div class=\"info-value\">{{ new Date($json.flight_date + 'T12:00:00').toLocaleDateString('pt-BR') }}</div></div></div><a href=\"https://www.google.com/travel/flights\" class=\"cta\">🛒 Comprar Agora com Melhor Preço</a></div><div class=\"footer\">FT Flight Manager · Monitoramento automático a cada 6h</div></div></body></html>",
+        "options": {}
+      },
+      "id": "outlook-email",
+      "name": "Outlook — Enviar Email",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [1560, 180],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": { "name": "Microsoft Outlook" }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule — A cada 6h": {
+      "main": [[{ "node": "PostgreSQL — Buscar Eventos", "type": "main", "index": 0 }]]
+    },
+    "PostgreSQL — Buscar Eventos": {
+      "main": [[{ "node": "HTTP Request — SerpAPI Voos", "type": "main", "index": 0 }]]
+    },
+    "HTTP Request — SerpAPI Voos": {
+      "main": [[{ "node": "Code — Extrair Menor Preço", "type": "main", "index": 0 }]]
+    },
+    "Code — Extrair Menor Preço": {
+      "main": [[{ "node": "PostgreSQL — Salvar e Verificar", "type": "main", "index": 0 }]]
+    },
+    "PostgreSQL — Salvar e Verificar": {
+      "main": [[{ "node": "Houve Queda de Preço?", "type": "main", "index": 0 }]]
+    },
+    "Houve Queda de Preço?": {
+      "main": [
+        [{ "node": "Outlook — Enviar Email", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1" }
+}
