@@ -1,0 +1,56 @@
+{
+  "name": "FT — Sync Eventos",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ft-events",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "wh-events",
+      "name": "Webhook — Novo Evento",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO n8n_eventos (id, name, city, airport, start_date, end_date, flight_date, origin, active, created_at, updated_at)\nVALUES (\n  '{{ $json.id }}',\n  '{{ $json.name }}',\n  '{{ $json.city }}',\n  '{{ $json.airport }}',\n  '{{ $json.start_date }}'::date,\n  '{{ $json.end_date }}'::date,\n  '{{ $json.flight_date }}'::date,\n  '{{ $json.origin }}',\n  true,\n  NOW(),\n  NOW()\n)\nON CONFLICT (id) DO UPDATE SET\n  name        = EXCLUDED.name,\n  city        = EXCLUDED.city,\n  airport     = EXCLUDED.airport,\n  start_date  = EXCLUDED.start_date,\n  end_date    = EXCLUDED.end_date,\n  flight_date = EXCLUDED.flight_date,\n  origin      = EXCLUDED.origin,\n  updated_at  = NOW();",
+        "options": {}
+      },
+      "id": "pg-upsert-event",
+      "name": "PostgreSQL — Upsert Evento",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [480, 300],
+      "credentials": {
+        "postgres": {
+          "name": "PostgreSQL — FuelTech"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "ok"
+      },
+      "id": "respond-events",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [720, 300]
+    }
+  ],
+  "connections": {
+    "Webhook — Novo Evento": {
+      "main": [[{ "node": "PostgreSQL — Upsert Evento", "type": "main", "index": 0 }]]
+    },
+    "PostgreSQL — Upsert Evento": {
+      "main": [[{ "node": "Responder OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1" }
+}

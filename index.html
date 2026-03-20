@@ -979,6 +979,22 @@ let purchases = JSON.parse(localStorage.getItem('ft_purchases') || '[]');
 let autoTimer = null;
 let calViewDate = new Date();
 let hideExpired = true;
+
+// ─── N8N WEBHOOKS ─────────────────────────────────────────────────────────────
+// Cole as URLs geradas pelo N8N após importar os workflows
+const N8N_EVENT_WEBHOOK = localStorage.getItem('n8n_event_url') || '';
+const N8N_ALERT_WEBHOOK = localStorage.getItem('n8n_alert_url') || '';
+
+async function postToN8N(url, payload) {
+  if (!url) return;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch(e) { console.warn('[N8N]', e.message); }
+}
 let pax = { men: 0, women: 0 };
 
 function changePax(gender, delta) {
@@ -1418,6 +1434,12 @@ function saveNewEvent() {
     status: 'monitoring',
   };
   events.push(ev);
+  // Sincroniza com PostgreSQL via N8N
+  postToN8N(N8N_EVENT_WEBHOOK, {
+    id: ev.id, name: ev.name, city: ev.city, airport: ev.airport,
+    start_date: ev.startDate, end_date: ev.endDate,
+    flight_date: ev.startDate, origin: ev.origin || 'POA', active: true,
+  });
   renderCalendar();
   renderMonthCalendar();
   populateEventSelect();
@@ -1923,6 +1945,21 @@ async function refreshAllAlerts() {
           a._notified = true;
           const ev = events.find(e => e.id === a.eventId);
           if (ev) ev.status = 'alert';
+          // Dispara webhook N8N → salva no banco + envia email
+          const fl = match.flights || [];
+          postToN8N(N8N_ALERT_WEBHOOK, {
+            evento_id:   a.eventId,
+            evento_name: a.eventName,
+            airline:     a.airline,
+            price:       match.price,
+            dep_time:    fl[0]?.departure_airport?.time?.slice(11,16) || '',
+            arr_time:    (fl[fl.length-1] || fl[0])?.arrival_airport?.time?.slice(11,16) || '',
+            stops:       (match.layovers||[]).length,
+            triggered:   true,
+            origin:      a.origin || ev?.origin || 'POA',
+            dest:        a.airport,
+            flight_date: a.date,
+          });
           toast(`⚡ Alerta disparado! ${a.airline} POA→${a.airport}: ${fmtBRL(match.price)}`);
         }
       }
