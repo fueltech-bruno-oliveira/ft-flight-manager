@@ -997,7 +997,7 @@ async function postToN8N(url, payload) {
     await fetch(url, {
       method: 'POST',
       mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload),
     });
   } catch(e) { console.warn('[N8N]', e.message); }

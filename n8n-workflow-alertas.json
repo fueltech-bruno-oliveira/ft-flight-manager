@@ -16,6 +16,16 @@
     },
     {
       "parameters": {
+        "jsCode": "// O app envia text/plain com body JSON — fazemos o parse aqui\nconst raw = $input.first().json.body ?? $input.first().json;\nconst data = typeof raw === 'string' ? JSON.parse(raw) : raw;\nreturn [{ json: data }];"
+      },
+      "id": "code-parse",
+      "name": "Code — Parse JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO n8n_monitoramento (evento_id, checked_at, price, airline, dep_time, arr_time, stops, triggered)\nVALUES (\n  '{{ $json.evento_id }}',\n  NOW(),\n  {{ $json.price }},\n  '{{ $json.airline }}',\n  '{{ $json.dep_time }}',\n  '{{ $json.arr_time }}',\n  {{ $json.stops }},\n  false\n);",
         "options": {}
@@ -24,7 +34,7 @@
       "name": "PostgreSQL — Salvar Monitoramento",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [480, 300],
+      "position": [680, 300],
       "credentials": {
         "postgres": {
           "name": "PostgreSQL — FuelTech"
@@ -34,14 +44,14 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  {{ $('Webhook — Alerta de Preço').item.json.price }}::numeric AS current_price,\n  (\n    SELECT MIN(price)\n    FROM n8n_monitoramento\n    WHERE evento_id = '{{ $('Webhook — Alerta de Preço').item.json.evento_id }}'\n      AND checked_at < NOW() - INTERVAL '30 seconds'\n  ) AS prev_min_price,\n  CASE\n    WHEN (\n      SELECT COUNT(*)\n      FROM n8n_monitoramento\n      WHERE evento_id = '{{ $('Webhook — Alerta de Preço').item.json.evento_id }}'\n        AND checked_at < NOW() - INTERVAL '30 seconds'\n    ) > 0\n    AND {{ $('Webhook — Alerta de Preço').item.json.price }}::numeric < (\n      SELECT MIN(price)\n      FROM n8n_monitoramento\n      WHERE evento_id = '{{ $('Webhook — Alerta de Preço').item.json.evento_id }}'\n        AND checked_at < NOW() - INTERVAL '30 seconds'\n    )\n    THEN true\n    ELSE false\n  END AS price_dropped;",
+        "query": "SELECT\n  {{ $('Code — Parse JSON').item.json.price }}::numeric AS current_price,\n  (\n    SELECT MIN(price)\n    FROM n8n_monitoramento\n    WHERE evento_id = '{{ $('Code — Parse JSON').item.json.evento_id }}'\n      AND checked_at < NOW() - INTERVAL '30 seconds'\n  ) AS prev_min_price,\n  CASE\n    WHEN (\n      SELECT COUNT(*)\n      FROM n8n_monitoramento\n      WHERE evento_id = '{{ $('Code — Parse JSON').item.json.evento_id }}'\n        AND checked_at < NOW() - INTERVAL '30 seconds'\n    ) > 0\n    AND {{ $('Code — Parse JSON').item.json.price }}::numeric < (\n      SELECT MIN(price)\n      FROM n8n_monitoramento\n      WHERE evento_id = '{{ $('Code — Parse JSON').item.json.evento_id }}'\n        AND checked_at < NOW() - INTERVAL '30 seconds'\n    )\n    THEN true\n    ELSE false\n  END AS price_dropped;",
         "options": {}
       },
       "id": "pg-check-drop",
       "name": "PostgreSQL — Verificar Queda",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [720, 300],
+      "position": [900, 300],
       "credentials": {
         "postgres": {
           "name": "PostgreSQL — FuelTech"
@@ -67,21 +77,21 @@
       "name": "Houve Queda de Preço?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [960, 300]
+      "position": [1120, 300]
     },
     {
       "parameters": {
         "sendTo": "email@fueltech.com.br",
-        "subject": "📉 Queda de preço detectada — {{ $('Webhook — Alerta de Preço').item.json.evento_name }}",
+        "subject": "📉 Queda de preço detectada — {{ $('Code — Parse JSON').item.json.evento_name }}",
         "emailType": "html",
-        "message": "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\"><style>body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e2e8f0;margin:0;padding:0}.container{max-width:560px;margin:0 auto;background:#1a1d2e;border-radius:16px;overflow:hidden;border:1px solid #2e3250}.header{background:linear-gradient(135deg,#5b6ef5,#7c3aed);padding:28px 32px;text-align:center}.header h1{margin:0;font-size:22px;color:#fff;font-weight:800}.badge{display:inline-block;background:rgba(255,255,255,.15);color:#fff;border-radius:20px;padding:4px 14px;font-size:13px;margin-top:8px}.body{padding:32px}.alert-box{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:20px;text-align:center;margin-bottom:24px}.price{font-size:42px;font-weight:900;color:#10b981;line-height:1}.price-label{font-size:13px;color:#64748b;margin-top:4px}.prev-price{font-size:16px;color:#ef4444;text-decoration:line-through;margin-top:8px;font-weight:700}.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}.info-item{background:#242740;border-radius:10px;padding:14px;text-align:center}.info-label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:4px}.info-value{font-size:14px;font-weight:700;color:#e2e8f0}.route{font-size:18px;font-weight:800;color:#818cf8;text-align:center;margin:16px 0}.cta{display:block;background:#10b981;color:#fff;text-align:center;padding:14px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;margin-top:20px}.footer{padding:16px 32px;text-align:center;font-size:12px;color:#64748b;border-top:1px solid #2e3250}</style></head><body><div class=\"container\"><div class=\"header\"><h1>📉 Preço Mais Baixo Detectado!</h1><span class=\"badge\">FT Flight Manager · Monitoramento Automático</span></div><div class=\"body\"><div class=\"alert-box\"><div class=\"price\">R$ {{ $('Webhook — Alerta de Preço').item.json.price.toLocaleString('pt-BR', {minimumFractionDigits:2}) }}</div><div class=\"price-label\">menor preço encontrado — por pessoa</div>{{ $('PostgreSQL — Verificar Queda').item.json.prev_min_price ? '<div class=\"prev-price\">Anterior: R$ ' + Number($('PostgreSQL — Verificar Queda').item.json.prev_min_price).toLocaleString('pt-BR', {minimumFractionDigits:2}) + '</div>' : '' }}</div><div class=\"route\">{{ $('Webhook — Alerta de Preço').item.json.origin }} → {{ $('Webhook — Alerta de Preço').item.json.dest }}</div><div class=\"info-grid\"><div class=\"info-item\"><div class=\"info-label\">Evento</div><div class=\"info-value\">{{ $('Webhook — Alerta de Preço').item.json.evento_name }}</div></div><div class=\"info-item\"><div class=\"info-label\">Companhia</div><div class=\"info-value\">{{ $('Webhook — Alerta de Preço').item.json.airline }}</div></div><div class=\"info-item\"><div class=\"info-label\">Partida</div><div class=\"info-value\">{{ $('Webhook — Alerta de Preço').item.json.dep_time }}</div></div><div class=\"info-item\"><div class=\"info-label\">Chegada</div><div class=\"info-value\">{{ $('Webhook — Alerta de Preço').item.json.arr_time }}</div></div><div class=\"info-item\"><div class=\"info-label\">Escalas</div><div class=\"info-value\">{{ $('Webhook — Alerta de Preço').item.json.stops === 0 ? 'Direto' : $('Webhook — Alerta de Preço').item.json.stops + ' escala(s)' }}</div></div><div class=\"info-item\"><div class=\"info-label\">Data do Voo</div><div class=\"info-value\">{{ new Date($('Webhook — Alerta de Preço').item.json.flight_date + 'T12:00:00').toLocaleDateString('pt-BR') }}</div></div></div><a href=\"https://www.google.com/travel/flights\" class=\"cta\">🛒 Comprar Agora com Melhor Preço</a></div><div class=\"footer\">FT Flight Manager · Monitoramento automático a cada 6h</div></div></body></html>",
+        "message": "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\"><style>body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e2e8f0;margin:0;padding:0}.container{max-width:560px;margin:0 auto;background:#1a1d2e;border-radius:16px;overflow:hidden;border:1px solid #2e3250}.header{background:linear-gradient(135deg,#5b6ef5,#7c3aed);padding:28px 32px;text-align:center}.header h1{margin:0;font-size:22px;color:#fff;font-weight:800}.badge{display:inline-block;background:rgba(255,255,255,.15);color:#fff;border-radius:20px;padding:4px 14px;font-size:13px;margin-top:8px}.body{padding:32px}.alert-box{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:20px;text-align:center;margin-bottom:24px}.price{font-size:42px;font-weight:900;color:#10b981;line-height:1}.price-label{font-size:13px;color:#64748b;margin-top:4px}.prev-price{font-size:16px;color:#ef4444;text-decoration:line-through;margin-top:8px;font-weight:700}.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}.info-item{background:#242740;border-radius:10px;padding:14px;text-align:center}.info-label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:4px}.info-value{font-size:14px;font-weight:700;color:#e2e8f0}.route{font-size:18px;font-weight:800;color:#818cf8;text-align:center;margin:16px 0}.cta{display:block;background:#10b981;color:#fff;text-align:center;padding:14px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;margin-top:20px}.footer{padding:16px 32px;text-align:center;font-size:12px;color:#64748b;border-top:1px solid #2e3250}</style></head><body><div class=\"container\"><div class=\"header\"><h1>📉 Preço Mais Baixo Detectado!</h1><span class=\"badge\">FT Flight Manager · Monitoramento Automático</span></div><div class=\"body\"><div class=\"alert-box\"><div class=\"price\">R$ {{ $('Code — Parse JSON').item.json.price.toLocaleString('pt-BR', {minimumFractionDigits:2}) }}</div><div class=\"price-label\">menor preço encontrado — por pessoa</div>{{ $('PostgreSQL — Verificar Queda').item.json.prev_min_price ? '<div class=\"prev-price\">Anterior: R$ ' + Number($('PostgreSQL — Verificar Queda').item.json.prev_min_price).toLocaleString('pt-BR', {minimumFractionDigits:2}) + '</div>' : '' }}</div><div class=\"route\">{{ $('Code — Parse JSON').item.json.origin }} → {{ $('Code — Parse JSON').item.json.dest }}</div><div class=\"info-grid\"><div class=\"info-item\"><div class=\"info-label\">Evento</div><div class=\"info-value\">{{ $('Code — Parse JSON').item.json.evento_name }}</div></div><div class=\"info-item\"><div class=\"info-label\">Companhia</div><div class=\"info-value\">{{ $('Code — Parse JSON').item.json.airline }}</div></div><div class=\"info-item\"><div class=\"info-label\">Partida</div><div class=\"info-value\">{{ $('Code — Parse JSON').item.json.dep_time }}</div></div><div class=\"info-item\"><div class=\"info-label\">Chegada</div><div class=\"info-value\">{{ $('Code — Parse JSON').item.json.arr_time }}</div></div><div class=\"info-item\"><div class=\"info-label\">Escalas</div><div class=\"info-value\">{{ $('Code — Parse JSON').item.json.stops === 0 ? 'Direto' : $('Code — Parse JSON').item.json.stops + ' escala(s)' }}</div></div><div class=\"info-item\"><div class=\"info-label\">Data do Voo</div><div class=\"info-value\">{{ new Date($('Code — Parse JSON').item.json.flight_date + 'T12:00:00').toLocaleDateString('pt-BR') }}</div></div></div><a href=\"https://www.google.com/travel/flights\" class=\"cta\">🛒 Comprar Agora com Melhor Preço</a></div><div class=\"footer\">FT Flight Manager · Monitoramento automático a cada 6h</div></div></body></html>",
         "options": {}
       },
       "id": "outlook-email",
       "name": "Outlook — Enviar Email",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
-      "position": [1200, 180],
+      "position": [1340, 180],
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "name": "Microsoft Outlook"
@@ -97,11 +107,14 @@
       "name": "Responder OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1200, 420]
+      "position": [1340, 420]
     }
   ],
   "connections": {
     "Webhook — Alerta de Preço": {
+      "main": [[{ "node": "Code — Parse JSON", "type": "main", "index": 0 }]]
+    },
+    "Code — Parse JSON": {
       "main": [[{ "node": "PostgreSQL — Salvar Monitoramento", "type": "main", "index": 0 }]]
     },
     "PostgreSQL — Salvar Monitoramento": {
