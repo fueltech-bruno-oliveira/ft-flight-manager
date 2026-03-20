@@ -448,8 +448,11 @@
       <span class="dot"></span>
       <span id="proxyStatus">Verificando…</span>
     </div>
-    <button class="btn-icon" onclick="refreshAllAlerts()" title="Atualizar alertas agora">
+    <button class="btn-icon" onclick="refreshAllAlerts()" title="Atualizar preços agora">
       <i data-lucide="refresh-cw"></i>
+    </button>
+    <button class="btn-icon" onclick="testN8NWebhook()" title="Testar envio ao N8N">
+      <i data-lucide="send"></i>
     </button>
   </div>
 </header>
@@ -1002,6 +1005,26 @@ async function postToN8N(url, payload) {
     });
   } catch(e) { console.warn('[N8N]', e.message); }
 }
+
+async function testN8NWebhook() {
+  if (!N8N_ALERT_WEBHOOK) { toast('URL do webhook N8N não configurada', 'warn'); return; }
+  const ev = events.find(e => e.endDate >= new Date().toISOString().split('T')[0]) || events[0];
+  await postToN8N(N8N_ALERT_WEBHOOK, {
+    evento_id:   ev?.id   || 'test-001',
+    evento_name: ev?.name || 'Evento Teste',
+    airline:     'LATAM',
+    price:       499.90,
+    dep_time:    '08:00',
+    arr_time:    '09:45',
+    stops:       0,
+    triggered:   false,
+    origin:      ev?.origin || 'POA',
+    dest:        ev?.airport || 'VCP',
+    flight_date: ev?.startDate || '2026-04-04',
+  });
+  toast('Payload de teste enviado ao N8N!');
+}
+
 let pax = { men: 0, women: 0 };
 
 function changePax(gender, delta) {
@@ -1038,6 +1061,7 @@ window.onload = async () => {
   renderAlerts();
   renderCompras();
   updateBadges();
+  startAutoRefresh(); // inicia monitoramento independente da SerpAPI
   await checkProxy();
 };
 
@@ -1177,7 +1201,6 @@ async function checkProxy() {
     if (r.ok && data.status === 'ok') {
       document.getElementById('proxyStatus').textContent = 'SerpAPI ativa';
       document.getElementById('apiPill').classList.add('ok');
-      startAutoRefresh();
     } else { showProxyWarning(); }
   } catch { showProxyWarning(); }
 }
