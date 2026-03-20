@@ -2013,6 +2013,9 @@ async function monitorAllEvents() {
       // Atualiza cache local com o preço atual
       lastEventPrices[ev.id] = currentPrice;
 
+      // Pausa 2s entre eventos para evitar rate limit da SerpAPI
+      await new Promise(r => setTimeout(r, 2000));
+
     } catch(err) { console.warn(`[Monitor] ${ev.name}:`, err.message); }
   }
 
