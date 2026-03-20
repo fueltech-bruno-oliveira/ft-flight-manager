@@ -91,23 +91,12 @@
       "name": "Outlook — Enviar Email",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
-      "position": [1340, 180],
+      "position": [1340, 300],
       "credentials": {
         "microsoftOutlookOAuth2Api": {
           "name": "Microsoft Outlook"
         }
       }
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "ok"
-      },
-      "id": "respond-alert",
-      "name": "Responder OK",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [1340, 420]
     }
   ],
   "connections": {
@@ -126,7 +115,7 @@
     "Houve Queda de Preço?": {
       "main": [
         [{ "node": "Outlook — Enviar Email", "type": "main", "index": 0 }],
-        [{ "node": "Responder OK",           "type": "main", "index": 0 }]
+        []
       ]
     }
   },
