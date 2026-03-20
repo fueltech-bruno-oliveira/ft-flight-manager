@@ -985,6 +985,13 @@ let hideExpired = true;
 const N8N_EVENT_WEBHOOK = localStorage.getItem('n8n_event_url') || '';
 const N8N_ALERT_WEBHOOK = localStorage.getItem('n8n_alert_url') || '';
 
+// Cache de último preço por evento — espelha o último registro salvo no banco
+let lastEventPrices = JSON.parse(localStorage.getItem('ft_last_prices') || '{}');
+
+function saveLastPrices() {
+  localStorage.setItem('ft_last_prices', JSON.stringify(lastEventPrices));
+}
+
 async function postToN8N(url, payload) {
   if (!url) return;
   try {
@@ -1925,53 +1932,87 @@ function removeAlert(id) {
 }
 
 // ─── AUTO-REFRESH ─────────────────────────────────────────────────────────────
-async function refreshAllAlerts() {
-  if (!alerts.length) { toast('Nenhum alerta para atualizar', 'warn'); return; }
-  toast('Atualizando preços via SerpAPI…');
-  for (const a of alerts) {
+// ─── MONITORAMENTO AUTOMÁTICO DE EVENTOS ──────────────────────────────────────
+// Monitora todos os eventos ativos (não expirados) a cada 6h.
+// Dispara N8N quando o preço atual for menor que o último preço registrado.
+async function monitorAllEvents() {
+  const today = new Date().toISOString().split('T')[0];
+  const active = events.filter(e => e.endDate >= today && e.airport && e.airport !== (e.origin || 'POA'));
+  if (!active.length) return;
+
+  console.log(`[Monitor] Verificando ${active.length} evento(s)…`);
+  let alerts_triggered = 0;
+
+  for (const ev of active) {
     try {
-      const params = new URLSearchParams({ engine:'google_flights', departure_id:'POA', arrival_id:a.airport, outbound_date:a.date, currency:'BRL', hl:'pt', gl:'br', type:'2' });
+      const origin = ev.origin || 'POA';
+      const params = new URLSearchParams({
+        engine: 'google_flights',
+        departure_id: origin,
+        arrival_id: ev.airport,
+        outbound_date: ev.startDate,
+        currency: 'BRL', hl: 'pt', gl: 'br', type: '2',
+      });
       const resp = await fetch(`/api/flights?${params}`);
       const data = await resp.json();
       if (data.error) throw new Error(data.error);
-      const all  = [...(data.best_flights||[]), ...(data.other_flights||[])];
-      const airlineLower = a.airline.toLowerCase();
-      const match = all.find(f => (f.flights||[])[0]?.airline?.toLowerCase().includes(airlineLower)) || all[0];
-      if (match?.price) {
-        a.currentPrice = match.price;
-        a.triggered    = match.price <= a.targetPrice;
-        a.lastChecked  = new Date().toISOString();
-        if (a.triggered && !a._notified) {
-          a._notified = true;
-          const ev = events.find(e => e.id === a.eventId);
-          if (ev) ev.status = 'alert';
-          // Dispara webhook N8N → salva no banco + envia email
-          const fl = match.flights || [];
-          postToN8N(N8N_ALERT_WEBHOOK, {
-            evento_id:   a.eventId,
-            evento_name: a.eventName,
-            airline:     a.airline,
-            price:       match.price,
-            dep_time:    fl[0]?.departure_airport?.time?.slice(11,16) || '',
-            arr_time:    (fl[fl.length-1] || fl[0])?.arrival_airport?.time?.slice(11,16) || '',
-            stops:       (match.layovers||[]).length,
-            triggered:   true,
-            origin:      a.origin || ev?.origin || 'POA',
-            dest:        a.airport,
-            flight_date: a.date,
-          });
-          toast(`⚡ Alerta disparado! ${a.airline} POA→${a.airport}: ${fmtBRL(match.price)}`);
-        }
+
+      const all   = [...(data.best_flights||[]), ...(data.other_flights||[])];
+      const best  = all.reduce((a, b) => (!a || b.price < a.price) ? b : a, null);
+      if (!best?.price) continue;
+
+      const currentPrice = best.price;
+      const lastPrice    = lastEventPrices[ev.id];
+      const dropped      = lastPrice != null && currentPrice < lastPrice;
+
+      // Sempre salva no banco via N8N (triggered=true só quando preço caiu)
+      const fl = best.flights || [];
+      postToN8N(N8N_ALERT_WEBHOOK, {
+        evento_id:   ev.id,
+        evento_name: ev.name,
+        airline:     (fl[0]?.airline) || 'N/D',
+        price:       currentPrice,
+        dep_time:    fl[0]?.departure_airport?.time?.slice(11,16) || '',
+        arr_time:    (fl[fl.length-1] || fl[0])?.arrival_airport?.time?.slice(11,16) || '',
+        stops:       (best.layovers||[]).length,
+        triggered:   dropped,
+        origin,
+        dest:        ev.airport,
+        flight_date: ev.startDate,
+      });
+
+      if (dropped) {
+        alerts_triggered++;
+        ev.status = 'alert';
+        toast(`⚡ Queda de preço! ${ev.name}: ${fmtBRL(lastPrice)} → ${fmtBRL(currentPrice)}`);
       }
-    } catch(err) { console.warn(`Alerta ${a.id}:`, err.message); }
+
+      // Atualiza cache local com o preço atual
+      lastEventPrices[ev.id] = currentPrice;
+
+    } catch(err) { console.warn(`[Monitor] ${ev.name}:`, err.message); }
   }
+
+  saveLastPrices();
   save(); renderCalendar(); renderMonthCalendar(); renderAlerts();
+  console.log(`[Monitor] Concluído — ${alerts_triggered} queda(s) detectada(s).`);
+}
+
+// Mantém suporte ao refresh manual de alertas individuais
+async function refreshAllAlerts() {
+  const today = new Date().toISOString().split('T')[0];
+  const active = events.filter(e => e.endDate >= today && e.airport && e.airport !== (e.origin || 'POA'));
+  if (!active.length) { toast('Nenhum evento ativo para monitorar', 'warn'); return; }
+  toast(`Verificando ${active.length} evento(s)…`);
+  await monitorAllEvents();
   toast('Preços atualizados!');
 }
 
 function startAutoRefresh() {
   if (autoTimer) clearInterval(autoTimer);
-  autoTimer = setInterval(refreshAllAlerts, 30 * 60 * 1000);
+  // Executa imediatamente e depois a cada 6 horas
+  monitorAllEvents();
+  autoTimer = setInterval(monitorAllEvents, 6 * 60 * 60 * 1000);
 }
 
 // ─── COMPRAS ──────────────────────────────────────────────────────────────────
