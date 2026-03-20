@@ -997,10 +997,10 @@ function saveLastPrices() {
 async function postToN8N(url, payload) {
   if (!url) return;
   try {
-    await fetch(url, {
+    // Roteado pelo proxy Vercel (/api/n8n) para evitar CORS/SSL do browser
+    await fetch('/api/n8n', {
       method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
   } catch(e) { console.warn('[N8N]', e.message); }
