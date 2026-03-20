@@ -530,8 +530,7 @@
           </div>
           <div class="form-group">
             <label>Partida (Origem)</label>
-            <input type="text" id="newEvCity" placeholder="Ex: Porto Alegre, RS"
-              style="width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13px;outline:none;">
+            <div class="ac-wrap" id="ac-new-event-origin"></div>
           </div>
           <div class="form-group">
             <label>Destino</label>
@@ -1392,6 +1391,7 @@ function toggleAddEventPanel() {
   p.style.display = open ? 'block' : 'none';
   if (open) {
     if (!addEventAcReady) {
+      createAirportAC('ac-new-event-origin',  'POA');
       createAirportAC('ac-new-event-airport', 'VCP');
       lucide.createIcons({ nodes: [p] });
       addEventAcReady = true;
@@ -1401,11 +1401,11 @@ function toggleAddEventPanel() {
 }
 
 function saveNewEvent() {
-  const name  = document.getElementById('newEvName').value.trim();
-  const city  = document.getElementById('newEvCity').value.trim();
-  const start = document.getElementById('newEvStart').value;
-  const end   = document.getElementById('newEvEnd').value || start;
-  const ap    = document.getElementById('ac-new-event-airport')._getCode();
+  const name   = document.getElementById('newEvName').value.trim();
+  const origin = document.getElementById('ac-new-event-origin')._getCode();
+  const start  = document.getElementById('newEvStart').value;
+  const end    = document.getElementById('newEvEnd').value || start;
+  const ap     = document.getElementById('ac-new-event-airport')._getCode();
 
   if (!name)  { toast('Informe o nome do evento', 'warn'); return; }
   if (!start) { toast('Informe a data de início', 'warn'); return; }
@@ -1413,7 +1413,7 @@ function saveNewEvent() {
 
   const ev = {
     id: 'e_' + Date.now(),
-    name, city: city || ap, airport: ap,
+    name, city: ap, airport: ap, origin,
     startDate: start, endDate: end,
     status: 'monitoring',
   };
@@ -1426,7 +1426,6 @@ function saveNewEvent() {
 
   // Limpa o formulário
   document.getElementById('newEvName').value  = '';
-  document.getElementById('newEvCity').value  = '';
   document.getElementById('newEvStart').value = '';
   document.getElementById('newEvEnd').value   = '';
   document.getElementById('addEventPanel').style.display = 'none';
