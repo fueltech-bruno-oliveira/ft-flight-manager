@@ -1445,10 +1445,9 @@ function goSearch(id) {
   if (ev) {
     document.getElementById('selEvent').value  = id;
     document.getElementById('ac-dest')._setCode(ev.airport);
+    document.getElementById('ac-origin')._setCode(ev.origin || 'POA');
     document.getElementById('selDate').value   = ev.startDate;
     document.getElementById('selReturn').value = ev.endDate;
-    const origin = document.getElementById('ac-origin')._getCode();
-    if (origin === ev.airport) document.getElementById('ac-origin')._setCode('POA');
   }
   switchTab('busca');
 }
@@ -1537,11 +1536,9 @@ function fillFromEvent() {
   const ev = events.find(e => e.id === id);
   if (!ev) return;
   document.getElementById('ac-dest')._setCode(ev.airport);
+  document.getElementById('ac-origin')._setCode(ev.origin || 'POA');
   document.getElementById('selDate').value   = ev.startDate;
   document.getElementById('selReturn').value = ev.endDate;
-  // Se origem = destino do evento, troca para POA
-  const origin = document.getElementById('ac-origin')._getCode();
-  if (origin === ev.airport) document.getElementById('ac-origin')._setCode('POA');
 }
 
 // ─── BUSCA DE VOOS ────────────────────────────────────────────────────────────
