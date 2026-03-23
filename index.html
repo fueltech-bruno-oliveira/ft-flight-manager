@@ -1020,8 +1020,14 @@ let events = [
   { id:'e16', name:'Festival Velopark',            city:'Nova Santa Rita / Porto Alegre, RS', airport:'POA', startDate:'2026-12-04', endDate:'2026-12-06', status:'monitoring' },
 ];
 
-let alerts    = JSON.parse(localStorage.getItem('ft_alerts')    || '[]');
-let purchases = JSON.parse(localStorage.getItem('ft_purchases') || '[]');
+let alerts        = JSON.parse(localStorage.getItem('ft_alerts')        || '[]');
+let purchases     = JSON.parse(localStorage.getItem('ft_purchases')     || '[]');
+let customEvents  = JSON.parse(localStorage.getItem('ft_custom_events') || '[]');
+events = [...events, ...customEvents];
+
+function saveCustomEvents() {
+  localStorage.setItem('ft_custom_events', JSON.stringify(customEvents));
+}
 let autoTimer = null;
 let calViewDate = new Date();
 let hideExpired = true;
@@ -1507,6 +1513,8 @@ function saveNewEvent() {
     status: 'monitoring',
   };
   events.push(ev);
+  customEvents.push(ev);
+  saveCustomEvents();
   // Sincroniza com PostgreSQL via N8N
   postToN8N(N8N_EVENT_WEBHOOK, {
     id: ev.id, name: ev.name, city: ev.city, airport: ev.airport,
