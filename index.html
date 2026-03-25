@@ -10,22 +10,35 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
   :root {
-    --primary:  #fe0000;
-    --dark-red: #cc0000;
-    --light-red:#ff3333;
-    --bg:       #f8fafc;
-    --surface:  #ffffff;
-    --surface2: #f1f5f9;
-    --surface3: #e2e8f0;
-    --border:   #e2e8f0;
-    --accent:   #fe0000;
-    --accent2:  #cc0000;
-    --green:    #16a34a;
-    --red:      #ef4444;
-    --yellow:   #f59e0b;
-    --text:     #1e293b;
-    --muted:    #64748b;
-    --radius:   12px;
+    --primary:   #fe0000;
+    --dark-red:  #cc0000;
+    --light-red: #ff3333;
+    --bg:        #0d0f1a;
+    --surface:   #161929;
+    --surface2:  #1e2235;
+    --surface3:  #252840;
+    --border:    #2a2f4a;
+    --accent:    #fe0000;
+    --accent2:   #cc0000;
+    --green:     #16a34a;
+    --red:       #ef4444;
+    --yellow:    #f59e0b;
+    --text:      #e2e8f0;
+    --muted:     #8892a4;
+    --radius:    12px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.4);
+    --shadow-md: 0 4px 16px rgba(0,0,0,.5);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,.6);
+  }
+  /* ── LIGHT MODE (override) ─────────────────────────────── */
+  body.light {
+    --bg:        #f8fafc;
+    --surface:   #ffffff;
+    --surface2:  #f1f5f9;
+    --surface3:  #e2e8f0;
+    --border:    #e2e8f0;
+    --text:      #1e293b;
+    --muted:     #64748b;
     --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
     --shadow-md: 0 4px 16px rgba(0,0,0,.1);
     --shadow-lg: 0 8px 32px rgba(0,0,0,.15);
@@ -33,7 +46,7 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    background: linear-gradient(135deg, #0d0f1a 0%, #111425 100%);
     color: var(--text);
     font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
     display: flex; flex-direction: column; height: 100vh; overflow: hidden;
@@ -454,6 +467,88 @@
   ::-webkit-scrollbar-track { background: var(--surface2); }
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+  /* ── DARK (default) overrides for hardcoded colors ───── */
+  .flight-card {
+    background: linear-gradient(135deg, var(--surface2) 0%, var(--surface3) 100%);
+  }
+  .flight-card.cheap {
+    background: linear-gradient(135deg, #0d2018, #0f2a1d);
+    border-color: var(--green);
+  }
+  .alert-card {
+    background: linear-gradient(135deg, var(--surface2), var(--surface3));
+  }
+  .alert-card.triggered {
+    background: linear-gradient(135deg, #2a0d0d, #3a1010);
+    border-color: rgba(239,68,68,.4);
+  }
+  th {
+    background: linear-gradient(135deg, var(--surface2) 0%, var(--surface3) 100%);
+  }
+  select option { background: var(--surface2); color: var(--text); }
+  .card-header-inner {
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%) !important;
+  }
+  .add-event-panel-inner {
+    background: linear-gradient(135deg, #1e1020 0%, var(--surface) 100%) !important;
+  }
+  .import-panel-inner {
+    background: linear-gradient(135deg, var(--surface2) 0%, var(--surface) 100%) !important;
+  }
+
+  /* ── LIGHT MODE overrides for hardcoded colors ────────── */
+  body.light {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  }
+  body.light .flight-card {
+    background: linear-gradient(135deg, var(--surface2) 0%, #edf2f7 100%);
+  }
+  body.light .flight-card.cheap {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    border-color: var(--green);
+  }
+  body.light .alert-card {
+    background: linear-gradient(135deg, var(--surface2), #edf2f7);
+  }
+  body.light .alert-card.triggered {
+    background: linear-gradient(135deg, #fff5f5, #fee2e2);
+    border-color: rgba(239,68,68,.4);
+  }
+  body.light th {
+    background: linear-gradient(135deg, var(--surface2) 0%, #e8edf2 100%);
+  }
+  body.light select option { background: #fff; color: var(--text); }
+  body.light .card-header-inner {
+    background: linear-gradient(135deg, #fff 0%, var(--surface2) 100%) !important;
+  }
+  body.light .add-event-panel-inner {
+    background: linear-gradient(135deg, #fff5f5 0%, #fff 100%) !important;
+  }
+  body.light .import-panel-inner {
+    background: linear-gradient(135deg, #f8fafc 0%, #fff 100%) !important;
+  }
+
+  /* theme segmented toggle */
+  .theme-seg {
+    display: flex; align-items: center;
+    background: rgba(0,0,0,.2); border-radius: 8px; padding: 3px;
+    gap: 2px;
+  }
+  .theme-seg-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 6px; border: none;
+    font-size: 12px; font-weight: 700; cursor: pointer;
+    color: rgba(255,255,255,.55); background: transparent;
+    transition: all .15s; white-space: nowrap; font-family: inherit;
+  }
+  .theme-seg-btn svg { width: 13px; height: 13px; }
+  .theme-seg-btn.active {
+    background: rgba(255,255,255,.2);
+    color: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+  }
+  .theme-seg-btn:hover:not(.active) { color: rgba(255,255,255,.8); }
 </style>
 </head>
 <body>
@@ -497,6 +592,16 @@
   </div>
 </header>
 
+<!-- ════ THEME TOGGLE ════ -->
+<div id="themeWidget" style="position:fixed;bottom:28px;right:28px;z-index:9999;display:flex;align-items:center;border-radius:12px;padding:5px;gap:3px;box-shadow:0 4px 24px rgba(0,0,0,.5);font-family:'Inter',sans-serif;">
+  <button id="btnDark" onclick="setTheme('dark')" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">
+    🌙 Dark
+  </button>
+  <button id="btnLight" onclick="setTheme('light')" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">
+    ☀️ Light
+  </button>
+</div>
+
 <!-- ════ PROXY BANNER ════ -->
 <div id="proxyBanner" style="display:none; flex-shrink:0; background:rgba(239,68,68,.08); border-bottom:1px solid rgba(239,68,68,.2); padding:10px 28px; align-items:center; gap:14px; flex-wrap:wrap; font-size:13px;">
   <i data-lucide="alert-triangle" style="width:16px;height:16px;color:var(--red);flex-shrink:0;"></i>
@@ -535,7 +640,7 @@
 
     <!-- Import + Lista -->
     <div class="card" style="padding:0;overflow:hidden;">
-      <div style="padding:16px 20px;border-bottom:2px solid var(--primary);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:linear-gradient(135deg,#fff 0%,var(--surface2) 100%);">
+      <div class="card-header-inner" style="padding:16px 20px;border-bottom:2px solid var(--primary);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:linear-gradient(135deg,#fff 0%,var(--surface2) 100%);">
         <span class="card-title" style="border-bottom:none;padding-bottom:0;">
           <i data-lucide="list"></i> Eventos 2026 — FuelTech
         </span>
@@ -561,7 +666,7 @@
       </div>
 
       <!-- Adicionar evento manual (colapsável) -->
-      <div id="addEventPanel" style="display:none;padding:20px 24px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,#fff5f5 0%,#fff 100%);border-left:4px solid var(--primary);">
+      <div id="addEventPanel" class="add-event-panel-inner" style="display:none;padding:20px 24px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,#fff5f5 0%,#fff 100%);border-left:4px solid var(--primary);">
         <div style="font-size:11px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;display:flex;align-items:center;gap:6px;">
           <i data-lucide="calendar-plus" style="width:13px;height:13px;color:var(--primary);"></i> Novo Evento
         </div>
@@ -599,7 +704,7 @@
       </div>
 
       <!-- Import panel (colapsável) -->
-      <div id="importPanel" style="display:none;padding:20px 24px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,#f8fafc 0%,#fff 100%);border-left:4px solid var(--primary);">
+      <div id="importPanel" class="import-panel-inner" style="display:none;padding:20px 24px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,#f8fafc 0%,#fff 100%);border-left:4px solid var(--primary);">
         <div class="drop-zone" id="dropZone"
           onclick="document.getElementById('fileInput').click()"
           ondragover="event.preventDefault();this.classList.add('drag')"
@@ -1097,9 +1202,31 @@ function changePax(gender, delta) {
   }
 }
 
+// ─── THEME ────────────────────────────────────────────────────────────────────
+function applyTheme(dark) {
+  document.body.classList.toggle('light', !dark);
+  const btnDark  = document.getElementById('btnDark');
+  const btnLight = document.getElementById('btnLight');
+  const widget   = document.getElementById('themeWidget');
+  if (!btnDark || !btnLight || !widget) return;
+  widget.style.background = dark ? '#1e2235' : '#b30000';
+  widget.style.border     = dark ? '1px solid #2a2f4a' : '1px solid #990000';
+  btnDark.style.background  = dark  ? '#fe0000' : 'transparent';
+  btnDark.style.color        = dark  ? '#fff'    : 'rgba(255,255,255,.7)';
+  btnLight.style.background  = !dark ? '#fff'    : 'transparent';
+  btnLight.style.color        = !dark ? '#b30000' : 'rgba(255,255,255,.7)';
+}
+function setTheme(mode) {
+  localStorage.setItem('ft_theme', mode);
+  applyTheme(mode === 'dark');
+}
+// Padrão sempre dark — ignora localStorage herdado
+applyTheme(localStorage.getItem('ft_theme') !== 'light');
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.onload = async () => {
   lucide.createIcons();
+  applyTheme(localStorage.getItem('ft_theme') !== 'light');
   populateAirportSelects();
   renderMonthCalendar();
   renderCalendar();
