@@ -583,6 +583,14 @@
       <span class="dot"></span>
       <span id="proxyStatus">Verificando…</span>
     </div>
+    <div id="themeWidget" style="display:flex;align-items:center;background:rgba(0,0,0,.2);border-radius:8px;padding:3px;gap:2px;">
+      <button id="btnDark" onclick="setTheme('dark')" style="display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:6px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">
+        🌙 Dark
+      </button>
+      <button id="btnLight" onclick="setTheme('light')" style="display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:6px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">
+        ☀️ Light
+      </button>
+    </div>
     <button class="btn-icon" onclick="refreshAllAlerts()" title="Atualizar preços agora">
       <i data-lucide="refresh-cw"></i>
     </button>
@@ -591,16 +599,6 @@
     </button>
   </div>
 </header>
-
-<!-- ════ THEME TOGGLE ════ -->
-<div id="themeWidget" style="position:fixed;bottom:28px;right:28px;z-index:9999;display:flex;align-items:center;border-radius:12px;padding:5px;gap:3px;box-shadow:0 4px 24px rgba(0,0,0,.5);font-family:'Inter',sans-serif;">
-  <button id="btnDark" onclick="setTheme('dark')" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">
-    🌙 Dark
-  </button>
-  <button id="btnLight" onclick="setTheme('light')" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">
-    ☀️ Light
-  </button>
-</div>
 
 <!-- ════ PROXY BANNER ════ -->
 <div id="proxyBanner" style="display:none; flex-shrink:0; background:rgba(239,68,68,.08); border-bottom:1px solid rgba(239,68,68,.2); padding:10px 28px; align-items:center; gap:14px; flex-wrap:wrap; font-size:13px;">
@@ -1209,8 +1207,7 @@ function applyTheme(dark) {
   const btnLight = document.getElementById('btnLight');
   const widget   = document.getElementById('themeWidget');
   if (!btnDark || !btnLight || !widget) return;
-  widget.style.background = dark ? '#1e2235' : '#b30000';
-  widget.style.border     = dark ? '1px solid #2a2f4a' : '1px solid #990000';
+  widget.style.background = 'rgba(0,0,0,.2)';
   btnDark.style.background  = dark  ? '#fe0000' : 'transparent';
   btnDark.style.color        = dark  ? '#fff'    : 'rgba(255,255,255,.7)';
   btnLight.style.background  = !dark ? '#fff'    : 'transparent';
