@@ -28,8 +28,7 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "return [{ json: {\n  evento_id:   String($json.id),\n  evento_name: $json.name,\n  origin:      $json.origin || 'POA',\n  dest:        $json.airport,\n  flight_date: String($json.flight_date).substring(0, 10),\n  city:        $json.city || ''\n}}];"
+        "jsCode": "return $input.all().map(item => ({\n  json: {\n    evento_id:   String(item.json.id),\n    evento_name: item.json.name || '',\n    origin:      item.json.origin || 'POA',\n    dest:        item.json.airport || '',\n    flight_date: String(item.json.flight_date || '').substring(0, 10),\n    city:        item.json.city || ''\n  }\n}));"
       },
       "id": "code-ctx",
       "name": "Code — Preparar Contexto",
