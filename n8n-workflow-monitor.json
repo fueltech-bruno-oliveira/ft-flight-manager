@@ -28,6 +28,17 @@
     },
     {
       "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ev = $input.item.json;\nconst date = String(ev.flight_date).slice(0, 10);\n\nreturn [{ json: {\n  evento_id:   String(ev.id),\n  evento_name: ev.name,\n  origin:      ev.origin || 'POA',\n  dest:        ev.airport,\n  flight_date: date,\n  city:        ev.city || ''\n}}];"
+      },
+      "id": "code-ctx",
+      "name": "Code — Preparar Contexto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
         "url": "https://serpapi.com/search.json",
         "sendQuery": true,
         "options": { "timeout": 20000 },
@@ -35,8 +46,8 @@
           "parameters": [
             { "name": "engine",        "value": "google_flights" },
             { "name": "departure_id",  "value": "={{ $json.origin }}" },
-            { "name": "arrival_id",    "value": "={{ $json.airport }}" },
-            { "name": "outbound_date", "value": "={{ $json.flight_date.toString().slice(0,10) }}" },
+            { "name": "arrival_id",    "value": "={{ $json.dest }}" },
+            { "name": "outbound_date", "value": "={{ $json.flight_date }}" },
             { "name": "currency",      "value": "BRL" },
             { "name": "hl",            "value": "pt" },
             { "name": "gl",            "value": "br" },
@@ -49,18 +60,19 @@
       "name": "HTTP Request — SerpAPI Voos",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [680, 300]
+      "continueOnFail": true,
+      "position": [900, 300]
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const data = $input.item.json;\nconst ev   = $('PostgreSQL — Buscar Eventos').item.json;\n\nconsole.log(`[Monitor] ${ev.name} (${ev.origin}->${ev.airport})`);\nif (data.error) console.log(`[Monitor] ERRO: ${data.error}`);\n\nconst all = [...(data.best_flights || []), ...(data.other_flights || [])];\n\nif (!all.length || data.error) {\n  console.log(`[Monitor] Sem voos para ${ev.name}`);\n  return [];\n}\n\nconst best = all.reduce((a, b) => (!a || b.price < a.price) ? b : a, null);\nif (!best?.price) return [];\n\nconst fl = best.flights || [];\nconsole.log(`[Monitor] ${ev.name}: R$ ${best.price} (${fl[0]?.airline || 'N/D'})`);\n\nreturn [{ json: {\n  evento_id:   String(ev.id),\n  evento_name: ev.name,\n  airline:     fl[0]?.airline || 'N/D',\n  price:       best.price,\n  dep_time:    fl[0]?.departure_airport?.time?.slice(11,16) || '',\n  arr_time:    (fl[fl.length-1] || fl[0])?.arrival_airport?.time?.slice(11,16) || '',\n  stops:       (best.layovers || []).length,\n  origin:      ev.origin,\n  dest:        ev.airport,\n  flight_date: ev.flight_date.toString().slice(0,10)\n}}];"
+        "jsCode": "const data = $input.item.json;\nconst ctx  = $('Code — Preparar Contexto').item.json;\n\nif (!ctx || data.error) return [];\n\nconst all = [...(data.best_flights || []), ...(data.other_flights || [])];\nif (!all.length) return [];\n\nconst best = all.reduce((a, b) => (!a || b.price < a.price) ? b : a, null);\nif (!best?.price) return [];\n\nconst fl = best.flights || [];\n\nreturn [{ json: {\n  evento_id:   ctx.evento_id,\n  evento_name: ctx.evento_name,\n  airline:     fl[0]?.airline || 'N/D',\n  price:       best.price,\n  dep_time:    fl[0]?.departure_airport?.time?.slice(11,16) || '',\n  arr_time:    (fl[fl.length-1] || fl[0])?.arrival_airport?.time?.slice(11,16) || '',\n  stops:       (best.layovers || []).length,\n  origin:      ctx.origin,\n  dest:        ctx.dest,\n  flight_date: ctx.flight_date\n}}];"
       },
       "id": "code-extract",
-      "name": "Code — Extrair Menor Preço",
+      "name": "Code — Processar Voo",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [1100, 300]
     },
     {
       "parameters": {
@@ -72,19 +84,19 @@
       "name": "PostgreSQL — Salvar e Verificar",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1100, 300],
+      "position": [1300, 300],
       "credentials": { "postgres": { "name": "PostgreSQL — FuelTech" } }
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const row = $input.item.json;\n\n// Se success:true = 0 linhas (sem queda) → para o fluxo\nif (row.success || !row.current_price || !row.last_price) return [];\n\n// Garante que houve queda real\nif (Number(row.current_price) >= Number(row.last_price)) return [];\n\nreturn [{ json: row }];"
+        "jsCode": "const row = $input.item.json;\n\nif (row.success || !row.current_price || !row.last_price) return [];\nif (Number(row.current_price) >= Number(row.last_price)) return [];\n\nreturn [{ json: row }];"
       },
       "id": "code-check-drop",
       "name": "Code — Verificar Queda",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1300, 300]
+      "position": [1500, 300]
     },
     {
       "parameters": {
@@ -98,7 +110,7 @@
       "name": "Outlook — Enviar Email",
       "type": "n8n-nodes-base.microsoftOutlook",
       "typeVersion": 2,
-      "position": [1500, 300],
+      "position": [1700, 300],
       "credentials": {
         "microsoftOutlookOAuth2Api": { "name": "Microsoft Outlook" }
       }
@@ -109,12 +121,15 @@
       "main": [[{ "node": "PostgreSQL — Buscar Eventos", "type": "main", "index": 0 }]]
     },
     "PostgreSQL — Buscar Eventos": {
+      "main": [[{ "node": "Code — Preparar Contexto", "type": "main", "index": 0 }]]
+    },
+    "Code — Preparar Contexto": {
       "main": [[{ "node": "HTTP Request — SerpAPI Voos", "type": "main", "index": 0 }]]
     },
     "HTTP Request — SerpAPI Voos": {
-      "main": [[{ "node": "Code — Extrair Menor Preço", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Code — Processar Voo", "type": "main", "index": 0 }]]
     },
-    "Code — Extrair Menor Preço": {
+    "Code — Processar Voo": {
       "main": [[{ "node": "PostgreSQL — Salvar e Verificar", "type": "main", "index": 0 }]]
     },
     "PostgreSQL — Salvar e Verificar": {
