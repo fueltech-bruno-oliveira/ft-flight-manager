@@ -2036,25 +2036,9 @@ async function searchFlights() {
     const totalRooms = Math.ceil(pax.men / 2) + Math.ceil(pax.women / 2);
     const hotelRooms = totalRooms > 0 ? totalRooms : 1;
 
-    const hotelParams = new URLSearchParams({
-      engine:'google_hotels', q:`hotéis em ${destInfo.city}`,
-      check_in_date:date, check_out_date:hotelCheckout,
-      currency:'BRL', hl:'pt', gl:'br', sort_by:'3',
-      rooms: hotelRooms,
-      adults: Math.max(1, totalPax),
-    });
-
-    // Voos via Duffel (direto) + Hotéis via SerpAPI proxy (opcional, falha graciosamente)
-    const [results, hotelResp] = await Promise.allSettled([
-      fetchDuffelFlights(origin, dest, date, totalPax),
-      fetch(`/api/flights?${hotelParams}`),
-    ]);
-
-    if (results.status === 'rejected') throw new Error(results.reason?.message || 'Erro ao buscar voos');
-
-    const flights = results.value || [];
-    const hotelData = hotelResp.status === 'fulfilled' ? await hotelResp.value.json().catch(() => ({})) : {};
-    const hotels    = hotelData.properties || [];
+    // Busca voos via Duffel
+    const flights = await fetchDuffelFlights(origin, dest, date, totalPax);
+    const hotels  = []; // hotéis via link direto — sem API necessária
 
     if (!flights.length && !hotels.length) {
       el.innerHTML = `<div class="card"><div class="empty">
@@ -2222,15 +2206,11 @@ function renderSearchResults(results, hotels, target, origin, dest, date, checko
           ${target ? `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:6px 12px;font-size:13px;display:flex;align-items:center;gap:6px;">
             <i data-lucide="target" style="width:13px;height:13px;color:var(--primary);"></i> <strong>${fmtBRL(target)}</strong>
           </div>` : ''}
-          ${gFlightsUrl ? `<a href="${gFlightsUrl}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;">
-            <i data-lucide="external-link"></i> Google Flights
-          </a>` : ''}
         </div>
       </div>
       ${flightCards || `<div class="empty" style="padding:32px;"><i data-lucide="plane-landing"></i><p>Nenhum voo encontrado para esta rota e data.</p></div>`}
     </div>
 
-    ${hotels.length ? `
     <div class="card" style="margin-bottom:0;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
         <div>
@@ -2238,16 +2218,38 @@ function renderSearchResults(results, hotels, target, origin, dest, date, checko
             <i data-lucide="building-2" style="width:16px;height:16px;color:var(--primary);"></i>
             Hotéis em ${destCity}
           </div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px;">${fmtDate(date)} → ${fmtDate(checkout)} · ${hotels.length} opções
-            ${hotelRooms > 1 ? `· <strong style="color:var(--primary);">${hotelRooms} quartos</strong> (${pax.men ? pax.men+'♂' : ''}${pax.men && pax.women ? ' + ' : ''}${pax.women ? pax.women+'♀' : ''})` : ''}
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">
+            ${fmtDate(date)} → ${fmtDate(checkout)}
+            ${hotelRooms > 1 ? ` · <strong style="color:var(--primary);">${hotelRooms} quartos</strong>` : ''}
+            ${totalPax > 0 ? ` · ${totalPax} pessoa${totalPax > 1 ? 's' : ''}` : ''}
           </div>
         </div>
-        <a href="https://www.google.com/travel/hotels?q=hoteis+em+${encodeURIComponent(destCity)}&hl=pt&gl=br&curr=BRL" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;">
-          <i data-lucide="external-link"></i> Google Hotels
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <a href="https://www.google.com/travel/hotels?q=hoteis+em+${encodeURIComponent(destCity)}&hl=pt&gl=br&curr=BRL&dates=${date.replace(/-/g,'')}/${checkout.replace(/-/g,'')}&adults=${Math.max(1,totalPax)}&rooms=${hotelRooms}" target="_blank" rel="noopener"
+           style="flex:1;min-width:200px;text-decoration:none;">
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:14px;transition:border .15s;cursor:pointer;" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
+            <span style="font-size:28px;">🔍</span>
+            <div>
+              <div style="font-weight:700;font-size:13px;">Google Hotels</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Buscar com datas e quartos preenchidos</div>
+            </div>
+            <i data-lucide="external-link" style="width:14px;height:14px;color:var(--muted);margin-left:auto;"></i>
+          </div>
+        </a>
+        <a href="https://www.booking.com/searchresults.pt-br.html?ss=${encodeURIComponent(destCity)}&checkin=${date}&checkout=${checkout}&group_adults=${Math.max(1,totalPax)}&no_rooms=${hotelRooms}" target="_blank" rel="noopener"
+           style="flex:1;min-width:200px;text-decoration:none;">
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:14px;transition:border .15s;cursor:pointer;" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
+            <span style="font-size:28px;">🏨</span>
+            <div>
+              <div style="font-weight:700;font-size:13px;">Booking.com</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">Buscar com datas e quartos preenchidos</div>
+            </div>
+            <i data-lucide="external-link" style="width:14px;height:14px;color:var(--muted);margin-left:auto;"></i>
+          </div>
         </a>
       </div>
-      ${hotelCards}
-    </div>` : ''}
+    </div>
   `;
   lucide.createIcons();
 }
