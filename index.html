@@ -2000,7 +2000,22 @@ async function fetchDuffelFlights(origin, dest, date, numPax) {
   });
   const json = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(json?.errors?.[0]?.message || json?.error || `Duffel erro ${resp.status}`);
-  return mapDuffelOffers(json.data?.offers || []);
+
+  let offers = mapDuffelOffers(json.data?.offers || []);
+
+  // Filtro 1 — apenas voos diretos
+  offers = offers.filter(f => f.layovers.length === 0);
+
+  // Filtro 2 — partida a partir das 08:00 (horário local do aeroporto de origem)
+  offers = offers.filter(f => {
+    const time = (f.flights[0]?.departure_airport?.time || '').slice(11, 16);
+    return time >= '08:00';
+  });
+
+  // Filtro 3 — menor preço primeiro
+  offers.sort((a, b) => a.price - b.price);
+
+  return offers;
 }
 
 async function searchFlights() {
@@ -2200,7 +2215,12 @@ function renderSearchResults(results, hotels, target, origin, dest, date, checko
             <i data-lucide="plane" style="width:16px;height:16px;color:var(--primary);"></i>
             ${origin} → ${dest} · ${fmtDate(date)}
           </div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px;">${results.length} voos encontrados</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span>${results.length} voo${results.length !== 1 ? 's' : ''} encontrado${results.length !== 1 ? 's' : ''}</span>
+            <span style="background:rgba(99,102,241,.15);color:#a5b4fc;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:600;">Direto</span>
+            <span style="background:rgba(99,102,241,.15);color:#a5b4fc;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:600;">A partir das 08h</span>
+            <span style="background:rgba(99,102,241,.15);color:#a5b4fc;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:600;">Menor preço</span>
+          </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           ${target ? `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:6px 12px;font-size:13px;display:flex;align-items:center;gap:6px;">
