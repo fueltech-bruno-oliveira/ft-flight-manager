@@ -56,9 +56,11 @@ module.exports = async (req, res) => {
 
     if (action === 'ping') {
       if (!process.env.DUFFEL_KEY) return res.status(500).json({ error: 'DUFFEL_KEY não configurada no servidor' });
-      result = await duffelRequest('GET', '/airlines?limit=1', null);
+      result = await duffelRequest('GET', '/air/airlines?limit=1', null);
       if (result.status === 200) return res.status(200).json({ status: 'ok' });
-      return res.status(result.status).json({ error: 'Key inválida' });
+      const errBody = JSON.parse(result.body || '{}');
+      const errMsg  = errBody?.errors?.[0]?.message || errBody?.error || `Duffel retornou ${result.status}`;
+      return res.status(result.status).json({ error: errMsg });
 
     } else if (action === 'search') {
       // Cria offer request (busca de voos)
@@ -98,6 +100,6 @@ module.exports = async (req, res) => {
     res.status(result.status).send(result.body);
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || 'Erro interno no proxy Duffel' });
   }
 };
