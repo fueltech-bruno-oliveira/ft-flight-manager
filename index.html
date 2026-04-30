@@ -125,6 +125,31 @@
   }
   #proxyBanner a { color: var(--primary); font-weight: 700; }
 
+  /* ── SETTINGS MODAL ───────────────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px 32px; width: 100%; max-width: 480px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.4);
+  }
+  .modal-box h3 { margin: 0 0 20px; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .modal-field { margin-bottom: 16px; }
+  .modal-field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+  .modal-field input {
+    width: 100%; box-sizing: border-box;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; color: var(--text);
+    font-size: 13px; font-family: monospace; outline: none;
+    transition: border .15s;
+  }
+  .modal-field input:focus { border-color: var(--primary); }
+  .modal-field small { display: block; margin-top: 5px; font-size: 11px; color: var(--muted); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+
   /* ── LAYOUT ───────────────────────────────────────────── */
   .main {
     flex: 1; overflow-y: auto;
@@ -597,19 +622,46 @@
     <button class="btn-icon" onclick="testN8NWebhook()" title="Testar envio ao N8N">
       <i data-lucide="send"></i>
     </button>
+    <button class="btn-icon" onclick="openSettings()" title="Configurações">
+      <i data-lucide="settings"></i>
+    </button>
   </div>
 </header>
+
+<!-- ════ SETTINGS MODAL ════ -->
+<div id="settingsModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeSettings()">
+  <div class="modal-box">
+    <h3><i data-lucide="settings" style="width:18px;height:18px;"></i> Configurações</h3>
+
+    <div class="modal-field">
+      <label>Webhook N8N — Alertas de preço</label>
+      <input type="text" id="inputN8nAlert" placeholder="https://…/webhook/ft-price-alert" autocomplete="off">
+      <small>URL do webhook N8N que recebe as notificações de queda de preço.</small>
+    </div>
+
+    <div class="modal-field">
+      <label>Webhook N8N — Novos eventos</label>
+      <input type="text" id="inputN8nEvent" placeholder="https://…/webhook/ft-new-event" autocomplete="off">
+      <small>URL do webhook N8N que recebe notificações de novos eventos adicionados.</small>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeSettings()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="saveDuffelSettings()">
+        <i data-lucide="save"></i> Salvar
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- ════ PROXY BANNER ════ -->
 <div id="proxyBanner" style="display:none; flex-shrink:0; background:rgba(239,68,68,.08); border-bottom:1px solid rgba(239,68,68,.2); padding:10px 28px; align-items:center; gap:14px; flex-wrap:wrap; font-size:13px;">
   <i data-lucide="alert-triangle" style="width:16px;height:16px;color:var(--red);flex-shrink:0;"></i>
   <div style="flex:1;">
-    <strong style="color:#f87171;">API offline</strong>
-    <span style="color:var(--muted);margin-left:8px;">— Adicione a variável <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:12px;">SERP_KEY</code> em
-      <a href="https://vercel.com/dashboard" target="_blank">vercel.com</a> → Settings → Environment Variables,
-      depois clique <strong>Redeploy</strong>.</span>
+    <strong style="color:#f87171;">Duffel API offline</strong>
+    <span style="color:var(--muted);margin-left:8px;">— Adicione a variável <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:12px;">DUFFEL_KEY</code> no servidor (Vercel → Settings → Environment Variables) e faça Redeploy.</span>
   </div>
-  <button onclick="location.reload()" class="btn btn-ghost btn-sm">Testar novamente</button>
+  <button onclick="checkProxy()" class="btn btn-ghost btn-sm">Testar novamente</button>
 </div>
 
 <!-- ════ MAIN ════ -->
@@ -1132,6 +1184,9 @@ let autoTimer = null;
 let calViewDate = new Date();
 let hideExpired = true;
 
+// ─── DUFFEL ───────────────────────────────────────────────────────────────────
+// A key fica no servidor (variável de ambiente DUFFEL_KEY). O frontend só chama o proxy /api/duffel.
+
 // ─── N8N WEBHOOKS ─────────────────────────────────────────────────────────────
 const N8N_EVENT_WEBHOOK = localStorage.getItem('n8n_event_url') || '';
 const N8N_ALERT_WEBHOOK = localStorage.getItem('n8n_alert_url') || 'https://intranet.fueltech.com.br:5678/webhook-test/ft-price-alert';
@@ -1231,7 +1286,7 @@ window.onload = async () => {
   renderAlerts();
   renderCompras();
   updateBadges();
-  startAutoRefresh(); // inicia monitoramento independente da SerpAPI
+  startAutoRefresh();
   await checkProxy();
 };
 
@@ -1363,19 +1418,31 @@ function populateAirportSelects() {
   createAirportAC('ac-dest',   'VCP');
 }
 
-// ─── PROXY ────────────────────────────────────────────────────────────────────
+// ─── DUFFEL STATUS ────────────────────────────────────────────────────────────
 async function checkProxy() {
+  const pill = document.getElementById('apiPill');
+  pill.classList.remove('ok', 'err');
+  document.getElementById('proxyStatus').textContent = 'Verificando…';
   try {
-    const r = await fetch(`/api/flights`, { signal: AbortSignal.timeout(8000) });
+    const r = await fetch('/api/duffel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'ping' }),
+      signal: AbortSignal.timeout(8000),
+    });
     const data = await r.json().catch(() => ({}));
     if (r.ok && data.status === 'ok') {
-      document.getElementById('proxyStatus').textContent = 'SerpAPI ativa';
-      document.getElementById('apiPill').classList.add('ok');
-    } else { showProxyWarning(); }
-  } catch { showProxyWarning(); }
+      document.getElementById('proxyStatus').textContent = 'Duffel ✓';
+      pill.classList.add('ok');
+      document.getElementById('proxyBanner').style.display = 'none';
+    } else {
+      showProxyWarning(data.error || 'API offline');
+    }
+  } catch { showProxyWarning('Servidor offline'); }
 }
-function showProxyWarning() {
-  document.getElementById('proxyStatus').textContent = 'API offline';
+function showProxyWarning(msg) {
+  document.getElementById('proxyStatus').textContent = msg || 'API offline';
+  document.getElementById('apiPill').classList.remove('ok');
   document.getElementById('apiPill').classList.add('err');
   document.getElementById('proxyBanner').style.display = 'flex';
 }
@@ -1766,6 +1833,77 @@ function fillFromEvent() {
 }
 
 // ─── BUSCA DE VOOS ────────────────────────────────────────────────────────────
+// ─── SETTINGS MODAL ──────────────────────────────────────────────────────────
+function openSettings() {
+  document.getElementById('inputN8nAlert').value = localStorage.getItem('n8n_alert_url') || '';
+  document.getElementById('inputN8nEvent').value = localStorage.getItem('n8n_event_url') || '';
+  const modal = document.getElementById('settingsModal');
+  modal.style.display = 'flex';
+  lucide.createIcons();
+}
+function closeSettings() {
+  document.getElementById('settingsModal').style.display = 'none';
+}
+function saveDuffelSettings() {
+  const alertUrl = document.getElementById('inputN8nAlert').value.trim();
+  const eventUrl = document.getElementById('inputN8nEvent').value.trim();
+  if (alertUrl) localStorage.setItem('n8n_alert_url', alertUrl);
+  if (eventUrl) localStorage.setItem('n8n_event_url', eventUrl);
+  closeSettings();
+  toast('Configurações salvas', 'ok');
+}
+
+// ─── DUFFEL API ───────────────────────────────────────────────────────────────
+function parseDuffelDuration(iso) {
+  if (!iso) return 0;
+  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+  return parseInt(m?.[1] || 0) * 60 + parseInt(m?.[2] || 0);
+}
+
+function mapDuffelOffers(offers) {
+  return offers.map(offer => {
+    const slice    = offer.slices[0];
+    const segments = slice.segments;
+    const first    = segments[0];
+    const last     = segments[segments.length - 1];
+    const carrier  = first.operating_carrier || first.marketing_carrier || {};
+    const logo     = carrier.logo_symbol_url || carrier.logo_lockup_url || '';
+    const flightsArr = segments.map(s => ({
+      airline:           (s.operating_carrier || s.marketing_carrier || {}).name || '—',
+      flight_number:     `${(s.operating_carrier || s.marketing_carrier || {}).iata_code || ''}${s.operating_carrier_flight_number || s.marketing_carrier_flight_number || ''}`,
+      airline_logo:      logo,
+      departure_airport: { time: s.departing_at },
+      arrival_airport:   { time: s.arriving_at },
+    }));
+    const stops     = segments.length - 1;
+    const layovers  = stops > 0 ? segments.slice(0, -1).map(s => ({ name: s.destination?.iata_code || '' })) : [];
+    return {
+      price:          parseFloat(offer.total_amount),
+      offer_id:       offer.id,
+      flights:        flightsArr,
+      layovers,
+      total_duration: parseDuffelDuration(slice.duration),
+      booking_token:  null,
+    };
+  });
+}
+
+async function fetchDuffelFlights(origin, dest, date, numPax) {
+  const passengers = Array.from({ length: Math.max(1, numPax) }, () => ({ type: 'adult' }));
+  const resp = await fetch('/api/duffel', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'search',
+      payload: { origin, destination: dest, date, passengers },
+    }),
+    signal: AbortSignal.timeout(25000),
+  });
+  const json = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(json?.errors?.[0]?.message || json?.error || `Duffel erro ${resp.status}`);
+  return mapDuffelOffers(json.data?.offers || []);
+}
+
 async function searchFlights() {
   const origin  = document.getElementById('ac-origin')._getCode();
   const dest    = document.getElementById('ac-dest')._getCode();
@@ -1785,20 +1923,12 @@ async function searchFlights() {
   const el = document.getElementById('flightResults');
   el.innerHTML = `<div class="card" style="text-align:center;padding:52px;">
     <div class="spinner" style="font-size:32px;"><i data-lucide="loader-2" style="width:36px;height:36px;color:var(--primary);"></i></div>
-    <p style="margin-top:16px;font-weight:600;">Buscando voos e hotéis via SerpAPI…</p>
+    <p style="margin-top:16px;font-weight:600;">Buscando voos via Duffel…</p>
     <p style="font-size:12px;color:var(--muted);margin-top:4px;">${origin} → ${dest} · ${date}</p>
   </div>`;
   lucide.createIcons();
 
   try {
-    const isRound    = retDate && retDate > date;
-    const flightParams = new URLSearchParams({
-      engine:'google_flights', departure_id:origin, arrival_id:dest,
-      outbound_date:date, currency:'BRL', hl:'pt', gl:'br',
-      type: isRound ? '1' : '2',
-    });
-    if (isRound) flightParams.set('return_date', retDate);
-
     const hotelCheckout = retDate && retDate > date ? retDate : (() => {
       const d = new Date(date + 'T12:00:00'); d.setDate(d.getDate() + 1);
       return d.toISOString().split('T')[0];
@@ -1815,24 +1945,19 @@ async function searchFlights() {
       adults: Math.max(1, totalPax),
     });
 
-    // Fetch voos e hotéis em paralelo
-    const [flightResp, hotelResp] = await Promise.allSettled([
-      fetch(`/api/flights?${flightParams}`),
+    // Voos via Duffel (direto) + Hotéis via SerpAPI proxy (opcional, falha graciosamente)
+    const [results, hotelResp] = await Promise.allSettled([
+      fetchDuffelFlights(origin, dest, date, totalPax),
       fetch(`/api/flights?${hotelParams}`),
     ]);
 
-    const flightData = flightResp.status === 'fulfilled' ? await flightResp.value.json() : {};
-    const hotelData  = hotelResp.status  === 'fulfilled' ? await hotelResp.value.json()  : {};
+    if (results.status === 'rejected') throw new Error(results.reason?.message || 'Erro ao buscar voos');
 
-    if (flightData.error) throw new Error(flightData.error);
+    const flights = results.value || [];
+    const hotelData = hotelResp.status === 'fulfilled' ? await hotelResp.value.json().catch(() => ({})) : {};
+    const hotels    = hotelData.properties || [];
 
-    const results    = [...(flightData.best_flights||[]), ...(flightData.other_flights||[])];
-    const hotels     = hotelData.properties || [];
-    const gFlightsUrl = flightData.search_metadata?.google_flights_url || '';
-    const tfsMatch   = gFlightsUrl.match(/[?&]tfs=([^&]+)/);
-    const baseTfs    = tfsMatch ? tfsMatch[1] : '';
-
-    if (!results.length && !hotels.length) {
+    if (!flights.length && !hotels.length) {
       el.innerHTML = `<div class="card"><div class="empty">
         <i data-lucide="search-x"></i>
         <p>Nenhum resultado encontrado.<br><small>Tente datas diferentes ou aeroporto alternativo.</small></p>
@@ -1843,11 +1968,11 @@ async function searchFlights() {
       const ev = events.find(e => e.id === eventId);
       if (ev && ev.status === 'searching') { ev.status = 'monitoring'; renderCalendar(); renderMonthCalendar(); }
     }
-    renderSearchResults(results, hotels, target, origin, dest, date, hotelCheckout, destInfo.city, eventId, baseTfs, gFlightsUrl, totalPax, hotelRooms);
+    renderSearchResults(flights, hotels, target, origin, dest, date, hotelCheckout, destInfo.city, eventId, '', '', totalPax, hotelRooms);
   } catch(err) {
     el.innerHTML = `<div class="card"><div class="empty"><i data-lucide="alert-circle"></i>
       <p style="color:var(--red);font-weight:600;">${err.message}</p>
-      <p style="font-size:12px;color:var(--muted);margin-top:8px;">Verifique a API key ou a conexão.</p>
+      <p style="font-size:12px;color:var(--muted);margin-top:8px;">Verifique a API Key em ⚙ Configurações.</p>
     </div></div>`;
     lucide.createIcons();
     toast(err.message, 'err');
@@ -2141,31 +2266,19 @@ async function monitorAllEvents() {
   for (const ev of active) {
     try {
       const origin = ev.origin || 'POA';
-      const params = new URLSearchParams({
-        engine: 'google_flights',
-        departure_id: origin,
-        arrival_id: ev.airport,
-        outbound_date: ev.startDate,
-        currency: 'BRL', hl: 'pt', gl: 'br', type: '2',
-      });
-      const resp = await fetch(`/api/flights?${params}`);
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error);
-
-      const all   = [...(data.best_flights||[]), ...(data.other_flights||[])];
-      const best  = all.reduce((a, b) => (!a || b.price < a.price) ? b : a, null);
+      const offers = await fetchDuffelFlights(origin, ev.airport, ev.startDate, 1);
+      const best   = offers.reduce((a, b) => (!a || b.price < a.price) ? b : a, null);
       if (!best?.price) continue;
 
       const currentPrice = best.price;
       const lastPrice    = lastEventPrices[ev.id];
       const dropped      = lastPrice != null && currentPrice < lastPrice;
 
-      // Sempre salva no banco via N8N (triggered=true só quando preço caiu)
       const fl = best.flights || [];
       postToN8N(N8N_ALERT_WEBHOOK, {
         evento_id:   ev.id,
         evento_name: ev.name,
-        airline:     (fl[0]?.airline) || 'N/D',
+        airline:     fl[0]?.airline || 'N/D',
         price:       currentPrice,
         dep_time:    fl[0]?.departure_airport?.time?.slice(11,16) || '',
         arr_time:    (fl[fl.length-1] || fl[0])?.arrival_airport?.time?.slice(11,16) || '',
@@ -2182,11 +2295,10 @@ async function monitorAllEvents() {
         toast(`⚡ Queda de preço! ${ev.name}: ${fmtBRL(lastPrice)} → ${fmtBRL(currentPrice)}`);
       }
 
-      // Atualiza cache local com o preço atual
       lastEventPrices[ev.id] = currentPrice;
 
-      // Pausa 2s entre eventos para evitar rate limit da SerpAPI
-      await new Promise(r => setTimeout(r, 2000));
+      // Pausa entre eventos para respeitar rate limits do Duffel
+      await new Promise(r => setTimeout(r, 1500));
 
     } catch(err) { console.warn(`[Monitor] ${ev.name}:`, err.message); }
   }
