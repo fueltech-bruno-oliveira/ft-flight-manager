@@ -598,9 +598,8 @@
       <i data-lucide="bell"></i> Alertas
       <span class="badge" id="badge-alert">0</span>
     </button>
-    <button class="tab-btn" onclick="switchTab('compras')">
-      <i data-lucide="shopping-cart"></i> Compras
-      <span class="badge" id="badge-compras">0</span>
+    <button class="tab-btn" onclick="switchTab('historico')">
+      <i data-lucide="bar-chart-2"></i> Histórico
     </button>
   </nav>
   <div class="header-right">
@@ -881,23 +880,18 @@
     <div id="alertsWatching"></div>
   </div>
 
-  <!-- ══ COMPRAS ══ -->
-  <div class="page animate-in" id="page-compras">
-    <div class="grid-4" id="kpiGrid"></div>
-    <div id="buyQueue"></div>
-    <div class="card" style="padding:0;overflow:hidden;">
-      <div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:700;display:flex;align-items:center;gap:8px;">
-        <i data-lucide="receipt" style="width:15px;height:15px;color:var(--muted);"></i> Histórico de Compras
+  <!-- ══ HISTÓRICO ══ -->
+  <div class="page animate-in" id="page-historico">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+      <div>
+        <h2 style="font-size:16px;font-weight:800;margin:0;">Histórico de Preços</h2>
+        <p style="font-size:12px;color:var(--muted);margin:4px 0 0;">Evolução dos preços monitorados automaticamente</p>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Evento</th><th>Cia</th><th>Rota</th><th>Data Voo</th><th>Valor/pax</th><th>Qtd</th><th>Total</th><th>Registrado em</th><th>Status</th></tr>
-          </thead>
-          <tbody id="purchaseBody"></tbody>
-        </table>
-      </div>
+      <button class="btn btn-ghost btn-sm" onclick="refreshAllAlerts()">
+        <i data-lucide="refresh-cw"></i> Atualizar agora
+      </button>
     </div>
+    <div id="historicoContent"></div>
   </div>
 
 </main>
@@ -1174,7 +1168,7 @@ let events = [
 ];
 
 let alerts        = JSON.parse(localStorage.getItem('ft_alerts')        || '[]');
-let purchases     = JSON.parse(localStorage.getItem('ft_purchases')     || '[]');
+let priceHistory  = JSON.parse(localStorage.getItem('ft_price_history') || '{}');
 let customEvents  = JSON.parse(localStorage.getItem('ft_custom_events') || '[]');
 events = [...events, ...customEvents];
 
@@ -1285,7 +1279,6 @@ window.onload = async () => {
   renderCalendar();
   populateEventSelect();
   renderAlerts();
-  renderCompras();
   updateBadges();
   startAutoRefresh();
   await checkProxy();
@@ -1449,7 +1442,7 @@ function showProxyWarning(msg) {
 }
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
-const TAB_KEYS = ['calendario','busca','alertas','compras'];
+const TAB_KEYS = ['calendario','busca','alertas','historico'];
 function switchTab(tab) {
   document.querySelectorAll('.page').forEach(p => { p.classList.remove('active'); });
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
@@ -1469,8 +1462,8 @@ function switchTab(tab) {
   const badge = activeBtn.querySelector('.badge');
   if (badge && !badge.classList.contains('urgent')) badge.classList.add('active-tab');
 
-  if (tab === 'alertas') renderAlerts();
-  if (tab === 'compras') renderCompras();
+  if (tab === 'alertas')   renderAlerts();
+  if (tab === 'historico') renderHistorico();
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
@@ -1478,8 +1471,7 @@ const fmtBRL   = v  => 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractio
 const fmtDate  = d  => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', {day:'2-digit', month:'short', year:'numeric'});
 const daysUntil = d => Math.ceil((new Date(d + 'T12:00:00') - new Date()) / 86400000);
 const save = () => {
-  localStorage.setItem('ft_alerts',    JSON.stringify(alerts));
-  localStorage.setItem('ft_purchases', JSON.stringify(purchases));
+  localStorage.setItem('ft_alerts', JSON.stringify(alerts));
 };
 
 function toast(msg, type='ok') {
@@ -2214,9 +2206,9 @@ function renderAlerts() {
             </div>
           </div>
           <div style="display:flex;gap:7px;flex-shrink:0;">
-            <button class="btn btn-success btn-sm" onclick="markPurchased('${a.id}')">
+            <a class="btn btn-success btn-sm" href="https://www.google.com/flights#flt=POA.${a.airport}.${a.date};c:BRL;e:1;sd:1;t:f" target="_blank" rel="noopener">
               <i data-lucide="shopping-cart" style="width:13px;height:13px;"></i> Comprar
-            </button>
+            </a>
             <button class="btn btn-danger btn-sm" onclick="removeAlert('${a.id}')">
               <i data-lucide="trash-2" style="width:13px;height:13px;"></i>
             </button>
@@ -2318,6 +2310,7 @@ async function monitorAllEvents() {
       }
 
       lastEventPrices[ev.id] = currentPrice;
+      savePriceSnapshot(ev.id, ev.name, `${origin}→${ev.airport}`, currentPrice, fl[0]?.airline || '');
 
       // Pausa entre eventos para respeitar rate limits do Duffel
       await new Promise(r => setTimeout(r, 1500));
@@ -2347,91 +2340,112 @@ function startAutoRefresh() {
   autoTimer = setInterval(monitorAllEvents, 6 * 60 * 60 * 1000);
 }
 
-// ─── COMPRAS ──────────────────────────────────────────────────────────────────
-function markPurchased(alertId) {
-  const a = alerts.find(x => x.id === alertId);
-  if (!a) return;
-  const qty = parseInt(prompt(`Quantas passagens?\n${a.airline} POA→${a.airport} · ${fmtDate(a.date)} · ${fmtBRL(a.currentPrice)}/pax`, '1')) || 1;
-  if (!qty || qty < 1) return;
-  purchases.push({
-    id: 'p_' + Date.now(), eventName: a.eventName, airline: a.airline,
-    route: `POA→${a.airport}`, date: a.date, pricePerPax: a.currentPrice, qty,
-    total: a.currentPrice * qty, boughtAt: new Date().toISOString().split('T')[0], status:'confirmed',
-  });
-  const ev = events.find(e => e.id === a.eventId);
-  if (ev) ev.status = 'purchased';
-  alerts = alerts.filter(x => x.id !== alertId);
-  save(); renderCalendar(); renderMonthCalendar(); renderAlerts(); renderCompras(); updateBadges();
-  toast(`Compra registrada: ${qty}× ${fmtBRL(a.currentPrice * qty)}`);
+// ─── HISTÓRICO DE PREÇOS ──────────────────────────────────────────────────────
+function savePriceSnapshot(eventId, eventName, route, price, airline) {
+  if (!priceHistory[eventId]) priceHistory[eventId] = { eventName, route, snapshots: [] };
+  priceHistory[eventId].snapshots.push({ price, ts: new Date().toISOString(), airline });
+  if (priceHistory[eventId].snapshots.length > 90) {
+    priceHistory[eventId].snapshots = priceHistory[eventId].snapshots.slice(-90);
+  }
+  priceHistory[eventId].eventName = eventName;
+  priceHistory[eventId].route     = route;
+  localStorage.setItem('ft_price_history', JSON.stringify(priceHistory));
 }
 
-function renderCompras() {
-  const queue      = alerts.filter(a => a.triggered);
-  const totalSpent = purchases.reduce((s,p) => s + p.total, 0);
-  const kpis = [
-    { icon:'check-circle-2', val: purchases.length,                                                    label:'Compras Realizadas',  color:'var(--green)',  bg:'rgba(16,185,129,.1)'  },
-    { icon:'credit-card',    val: fmtBRL(totalSpent),                                                  label:'Total Investido',     color:'var(--accent)', bg:'rgba(91,110,245,.1)'  },
-    { icon:'zap',            val: queue.length,                                                         label:'Aguardando Compra',   color:'var(--red)',    bg:'rgba(239,68,68,.1)'   },
-    { icon:'calendar-check', val: events.filter(e=>['monitoring','alert'].includes(e.status)).length,  label:'Eventos Monitorados', color:'var(--yellow)', bg:'rgba(245,158,11,.1)'  },
-  ];
-  document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
-    `<div class="kpi">
-      <div class="kpi-icon" style="background:${k.bg};color:${k.color};">
-        <i data-lucide="${k.icon}"></i>
-      </div>
-      <div>
-        <div class="kpi-num" style="color:${k.color};">${k.val}</div>
-        <div class="kpi-label">${k.label}</div>
-      </div>
-    </div>`
-  ).join('');
+function buildPriceChart(snapshots, w = 520, h = 130) {
+  if (!snapshots || snapshots.length < 2) {
+    return `<div style="color:var(--muted);font-size:12px;text-align:center;padding:24px 0;border:1px dashed var(--border);border-radius:8px;">Aguardando mais registros…</div>`;
+  }
+  const prices = snapshots.map(s => s.price);
+  const maxP   = Math.max(...prices) * 1.05;
+  const minP   = Math.min(...prices) * 0.95;
+  const range  = maxP - minP || 1;
+  const pl = 58, pr = 12, pt = 10, pb = 26;
+  const cw = w - pl - pr, ch = h - pt - pb;
+  const px = i  => pl + (i / (snapshots.length - 1)) * cw;
+  const py = p  => pt + ch - ((p - minP) / range) * ch;
+  const line = snapshots.map((s, i) => `${i === 0 ? 'M' : 'L'}${px(i).toFixed(1)},${py(s.price).toFixed(1)}`).join(' ');
+  const area = `${line} L${px(snapshots.length-1).toFixed(1)},${(pt+ch).toFixed(1)} L${pl},${(pt+ch).toFixed(1)} Z`;
+  const yVals = [minP, (minP+maxP)/2, maxP];
+  const xIdxs = snapshots.length <= 3
+    ? snapshots.map((_, i) => i)
+    : [0, Math.floor(snapshots.length/2), snapshots.length-1];
+  const uid = 'g' + Date.now();
+  return `<svg width="100%" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="display:block;overflow:visible;">
+    <defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${yVals.map(p => `
+      <line x1="${pl}" y1="${py(p).toFixed(1)}" x2="${pl+cw}" y2="${py(p).toFixed(1)}" stroke="var(--border)" stroke-width="1" opacity="0.5"/>
+      <text x="${pl-6}" y="${(py(p)+4).toFixed(1)}" text-anchor="end" fill="var(--muted)" font-size="10">R$${Math.round(p)}</text>`).join('')}
+    <path d="${area}" fill="url(#${uid})"/>
+    <path d="${line}" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${snapshots.map((s, i) => {
+      const isLast = i === snapshots.length - 1;
+      const isMin  = s.price === Math.min(...prices);
+      const col    = isMin ? 'var(--green)' : 'var(--primary)';
+      return `<circle cx="${px(i).toFixed(1)}" cy="${py(s.price).toFixed(1)}" r="${isLast || isMin ? 4 : 2.5}" fill="${col}" stroke="var(--surface)" stroke-width="1.5"/>`;
+    }).join('')}
+    ${xIdxs.map(i => `<text x="${px(i).toFixed(1)}" y="${h-4}" text-anchor="middle" fill="var(--muted)" font-size="10">${new Date(snapshots[i].ts).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</text>`).join('')}
+  </svg>`;
+}
 
-  const bq = document.getElementById('buyQueue');
-  bq.innerHTML = queue.length
-    ? `<div class="card" style="border-color:rgba(239,68,68,.3);margin-bottom:0;">
-        <div style="font-weight:800;color:var(--red);margin-bottom:14px;font-size:14px;display:flex;align-items:center;gap:7px;">
-          <i data-lucide="zap" style="width:15px;height:15px;"></i> Fila de Compra — Preço Atingido!
+function renderHistorico() {
+  const content = document.getElementById('historicoContent');
+  if (!content) return;
+  const entries = Object.entries(priceHistory).filter(([, d]) => d.snapshots?.length > 0);
+  if (!entries.length) {
+    content.innerHTML = `<div class="card"><div class="empty">
+      <i data-lucide="bar-chart-2"></i>
+      <p>Nenhum histórico disponível ainda.<br>Clique em <strong>Atualizar agora</strong> para registrar o primeiro preço.</p>
+    </div></div>`;
+    lucide.createIcons(); return;
+  }
+  content.innerHTML = entries.map(([id, data]) => {
+    const snaps  = data.snapshots;
+    const prices = snaps.map(s => s.price);
+    const latest = snaps[snaps.length - 1];
+    const minP   = Math.min(...prices);
+    const maxP   = Math.max(...prices);
+    const trend  = snaps.length >= 2 ? latest.price - snaps[snaps.length - 2].price : 0;
+    const trendTxt   = trend < -0.5 ? `↓ ${fmtBRL(Math.abs(trend))}` : trend > 0.5 ? `↑ ${fmtBRL(trend)}` : '→ estável';
+    const trendColor = trend < -0.5 ? 'var(--green)' : trend > 0.5 ? 'var(--red)' : 'var(--muted)';
+    return `<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="font-weight:700;font-size:15px;">${data.eventName}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">${data.route} · ${snaps.length} registro${snaps.length !== 1 ? 's' : ''} · Último: ${new Date(latest.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
         </div>
-        ${queue.map(a => `
-          <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-top:1px solid var(--border);flex-wrap:wrap;">
-            <div style="flex:1;min-width:200px;">
-              <strong>${a.eventName}</strong><br>
-              <span style="font-size:12px;color:var(--muted);">${a.airline} · POA→${a.airport} · ${fmtDate(a.date)}</span>
-            </div>
-            <div style="font-size:18px;font-weight:900;color:var(--green);">${fmtBRL(a.currentPrice)}</div>
-            <button class="btn btn-success btn-sm" onclick="markPurchased('${a.id}')">
-              <i data-lucide="check"></i> Registrar Compra
-            </button>
-          </div>`).join('')}
-      </div>`
-    : '';
-
-  const body = document.getElementById('purchaseBody');
-  body.innerHTML = purchases.length
-    ? purchases.map(p => `<tr>
-        <td><strong>${p.eventName}</strong></td>
-        <td>${p.airline}</td>
-        <td style="font-family:monospace;font-size:12px;">${p.route}</td>
-        <td>${fmtDate(p.date)}</td>
-        <td>${fmtBRL(p.pricePerPax)}</td>
-        <td style="text-align:center;">${p.qty}</td>
-        <td><strong style="color:var(--primary);">${fmtBRL(p.total)}</strong></td>
-        <td style="color:var(--muted);font-size:12px;">${p.boughtAt}</td>
-        <td><span class="pill purchased">Confirmado</span></td>
-      </tr>`).join('')
-    : `<tr><td colspan="9"><div class="empty"><i data-lucide="inbox"></i><p>Nenhuma compra registrada.</p></div></td></tr>`;
-
-  updateBadges();
+        <div style="display:flex;gap:24px;align-items:flex-end;">
+          <div style="text-align:center;">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Mínimo</div>
+            <div style="font-size:18px;font-weight:800;color:var(--green);">${fmtBRL(minP)}</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Atual</div>
+            <div style="font-size:22px;font-weight:900;color:var(--primary);">${fmtBRL(latest.price)}</div>
+            <div style="font-size:11px;font-weight:600;color:${trendColor};margin-top:1px;">${trendTxt}</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Máximo</div>
+            <div style="font-size:18px;font-weight:800;color:var(--muted);">${fmtBRL(maxP)}</div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:16px 20px 12px;">${buildPriceChart(snaps)}</div>
+    </div>`;
+  }).join('');
   lucide.createIcons();
 }
 
+
 function updateBadges() {
-  document.getElementById('badge-cal').textContent     = events.length;
-  const n = alerts.filter(a => a.triggered).length;
+  document.getElementById('badge-cal').textContent = events.length;
+  const n  = alerts.filter(a => a.triggered).length;
   const ab = document.getElementById('badge-alert');
   ab.textContent = n;
   ab.className   = n > 0 ? 'badge urgent' : 'badge';
-  document.getElementById('badge-compras').textContent = purchases.length;
 }
 </script>
 </body>
