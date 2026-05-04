@@ -1922,8 +1922,12 @@ async function searchEmployee(q) {
   if (!q || q.length < 2) { dropdown.style.display = 'none'; return; }
   _empSearchTimer = setTimeout(async () => {
     try {
-      const resp = await fetch(`/api/employees?q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(8000) });
+      const resp = await fetch(`/api/employees?q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(10000) });
       const list = await resp.json();
+      if (!resp.ok || list?.error) {
+        dropdown.innerHTML = `<div style="padding:12px 14px;font-size:12px;color:var(--red);">Erro: ${list?.error || resp.status}</div>`;
+        dropdown.style.display = 'block'; return;
+      }
       if (!Array.isArray(list) || !list.length) {
         dropdown.innerHTML = `<div style="padding:12px 14px;font-size:13px;color:var(--muted);">Nenhum funcionário encontrado</div>`;
       } else {
@@ -1936,7 +1940,10 @@ async function searchEmployee(q) {
           </div>`).join('');
       }
       dropdown.style.display = 'block';
-    } catch { dropdown.style.display = 'none'; }
+    } catch(err) {
+      dropdown.innerHTML = `<div style="padding:12px 14px;font-size:12px;color:var(--red);">Erro: ${err.message}</div>`;
+      dropdown.style.display = 'block';
+    }
   }, 300);
 }
 
