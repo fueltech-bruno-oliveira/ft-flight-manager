@@ -689,16 +689,20 @@
     </div>
 
     <div class="modal-field">
-      <label>Buscar funcionário</label>
+      <label style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Funcionários <span id="buyEmpCount" style="color:var(--primary);font-weight:700;"></span></span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;">Busque e adicione um por um</span>
+      </label>
       <div style="position:relative;">
+        <i data-lucide="search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:13px;height:13px;color:var(--muted);pointer-events:none;"></i>
         <input type="text" id="buyEmpSearch" placeholder="Digite o nome do colaborador…"
           autocomplete="off" oninput="searchEmployee(this.value)"
-          style="width:100%;box-sizing:border-box;">
+          style="width:100%;box-sizing:border-box;padding-left:32px;">
         <div id="buyEmpDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;z-index:100;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.3);margin-top:4px;"></div>
       </div>
     </div>
 
-    <div id="buyEmpList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;"></div>
+    <div id="buyEmpList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;min-height:0;"></div>
 
     <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
       <span style="font-size:13px;color:var(--muted);">Total <span id="buyModalQtyLabel" style="color:var(--primary);font-weight:700;"></span></span>
@@ -1954,8 +1958,13 @@ function removeEmployee(cpf) {
 }
 
 function renderEmployeeList() {
-  const el = document.getElementById('buyEmpList');
-  if (!_buyEmployees.length) { el.innerHTML = ''; return; }
+  const el    = document.getElementById('buyEmpList');
+  const count = document.getElementById('buyEmpCount');
+  if (count) count.textContent = _buyEmployees.length ? `(${_buyEmployees.length})` : '';
+  if (!_buyEmployees.length) {
+    el.innerHTML = `<div style="text-align:center;padding:12px;font-size:12px;color:var(--muted);border:1px dashed var(--border);border-radius:8px;">Nenhum funcionário adicionado</div>`;
+    return;
+  }
   el.innerHTML = _buyEmployees.map(e => `
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
       <div>

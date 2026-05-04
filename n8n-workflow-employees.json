@@ -15,6 +15,7 @@
     },
     {
       "parameters": {
+        "operation": "executeQuery",
         "query": "SELECT TOP 20\n  RTRIM(RA_MAT)   AS matricula,\n  RTRIM(RA_NOME)  AS nome,\n  RTRIM(RA_CIC)   AS cpf,\n  CONVERT(VARCHAR(10), RA_NASC, 23) AS data_nascimento,\n  RTRIM(RA_EMAIL) AS email,\n  RTRIM(RA_TEL)   AS telefone,\n  RTRIM(RA_SEXO)  AS sexo\nFROM SRA010\nWHERE D_E_L_E_T_ = ' '\n  AND RA_DEMISSA  = '  '\n  AND RA_NOME LIKE '%' + '{{ $json.query }}' + '%'\nORDER BY RA_NOME"
       },
       "name": "SQL Server — Busca SRA",
