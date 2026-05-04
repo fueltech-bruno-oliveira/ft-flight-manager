@@ -689,13 +689,19 @@
     </div>
 
     <div class="modal-field">
-      <label>Quantidade de passagens</label>
-      <input type="number" id="buyModalQty" min="1" max="50" value="1"
-        oninput="updateBuyTotal()" style="width:100px;">
+      <label>Buscar funcionário</label>
+      <div style="position:relative;">
+        <input type="text" id="buyEmpSearch" placeholder="Digite o nome do colaborador…"
+          autocomplete="off" oninput="searchEmployee(this.value)"
+          style="width:100%;box-sizing:border-box;">
+        <div id="buyEmpDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;z-index:100;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.3);margin-top:4px;"></div>
+      </div>
     </div>
 
+    <div id="buyEmpList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;"></div>
+
     <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
-      <span style="font-size:13px;color:var(--muted);">Total</span>
+      <span style="font-size:13px;color:var(--muted);">Total <span id="buyModalQtyLabel" style="color:var(--primary);font-weight:700;"></span></span>
       <span style="font-size:20px;font-weight:900;color:var(--primary);" id="buyModalTotal">—</span>
     </div>
 
@@ -1879,9 +1885,12 @@ function fillFromEvent() {
 // ─── BUSCA DE VOOS ────────────────────────────────────────────────────────────
 // ─── BUY MODAL ───────────────────────────────────────────────────────────────
 let _buyData = {};
+let _buyEmployees = [];
+let _empSearchTimer = null;
 
 function openBuyModal(offerId, airline, route, date, price, eventId, dep, arr, dur, stops) {
-  _buyData = { offerId, airline, route, date, price: parseFloat(price), eventId, dep, arr, dur, stops: parseInt(stops) };
+  _buyData      = { offerId, airline, route, date, price: parseFloat(price), eventId, dep, arr, dur, stops: parseInt(stops) };
+  _buyEmployees = [];
   document.getElementById('buyModalAirline').textContent = airline;
   document.getElementById('buyModalRoute').textContent   = `${route} · ${date}`;
   document.getElementById('buyModalPrice').textContent   = fmtBRL(parseFloat(price));
@@ -1889,36 +1898,99 @@ function openBuyModal(offerId, airline, route, date, price, eventId, dep, arr, d
   document.getElementById('buyModalArr').textContent     = arr;
   document.getElementById('buyModalDur').textContent     = dur;
   document.getElementById('buyModalStops').textContent   = parseInt(stops) === 0 ? 'Direto' : `${stops} escala${stops > 1 ? 's' : ''}`;
-  document.getElementById('buyModalQty').value           = '1';
+  document.getElementById('buyEmpSearch').value          = '';
+  document.getElementById('buyEmpDropdown').style.display = 'none';
+  renderEmployeeList();
   updateBuyTotal();
   const modal = document.getElementById('buyModal');
   modal.style.display = 'flex';
   lucide.createIcons();
+  setTimeout(() => document.getElementById('buyEmpSearch').focus(), 100);
 }
 function closeBuyModal() {
   document.getElementById('buyModal').style.display = 'none';
+  document.getElementById('buyEmpDropdown').style.display = 'none';
 }
+
+async function searchEmployee(q) {
+  clearTimeout(_empSearchTimer);
+  const dropdown = document.getElementById('buyEmpDropdown');
+  if (!q || q.length < 2) { dropdown.style.display = 'none'; return; }
+  _empSearchTimer = setTimeout(async () => {
+    try {
+      const resp = await fetch(`/api/employees?q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(8000) });
+      const list = await resp.json();
+      if (!Array.isArray(list) || !list.length) {
+        dropdown.innerHTML = `<div style="padding:12px 14px;font-size:13px;color:var(--muted);">Nenhum funcionário encontrado</div>`;
+      } else {
+        dropdown.innerHTML = list.map(e => `
+          <div onclick="selectEmployee(${JSON.stringify(e).replace(/"/g,'&quot;')})"
+            style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);transition:background .1s;"
+            onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+            <div style="font-weight:600;">${e.nome}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">CPF: ${e.cpf} · Nasc: ${e.data_nascimento}</div>
+          </div>`).join('');
+      }
+      dropdown.style.display = 'block';
+    } catch { dropdown.style.display = 'none'; }
+  }, 300);
+}
+
+function selectEmployee(emp) {
+  if (_buyEmployees.find(e => e.cpf === emp.cpf)) {
+    toast('Funcionário já adicionado', 'warn'); return;
+  }
+  _buyEmployees.push(emp);
+  document.getElementById('buyEmpSearch').value = '';
+  document.getElementById('buyEmpDropdown').style.display = 'none';
+  renderEmployeeList();
+  updateBuyTotal();
+}
+
+function removeEmployee(cpf) {
+  _buyEmployees = _buyEmployees.filter(e => e.cpf !== cpf);
+  renderEmployeeList();
+  updateBuyTotal();
+}
+
+function renderEmployeeList() {
+  const el = document.getElementById('buyEmpList');
+  if (!_buyEmployees.length) { el.innerHTML = ''; return; }
+  el.innerHTML = _buyEmployees.map(e => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <div>
+        <div style="font-weight:600;font-size:13px;">${e.nome}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">CPF: ${e.cpf} · Nasc: ${e.data_nascimento} · ${e.sexo === 'M' ? 'Masculino' : 'Feminino'}</div>
+      </div>
+      <button onclick="removeEmployee('${e.cpf}')" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:4px;" title="Remover">
+        <i data-lucide="x" style="width:14px;height:14px;"></i>
+      </button>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
 function updateBuyTotal() {
-  const qty   = parseInt(document.getElementById('buyModalQty').value) || 1;
-  const total = _buyData.price * qty;
-  document.getElementById('buyModalTotal').textContent = fmtBRL(total);
+  const qty   = _buyEmployees.length;
+  const total = _buyData.price ? _buyData.price * Math.max(1, qty) : 0;
+  document.getElementById('buyModalTotal').textContent   = fmtBRL(total);
+  document.getElementById('buyModalQtyLabel').textContent = qty > 0 ? `· ${qty} passageiro${qty > 1 ? 's' : ''}` : '';
 }
+
 function confirmBuy() {
-  const qty = parseInt(document.getElementById('buyModalQty').value) || 1;
-  if (qty < 1) { toast('Informe ao menos 1 passagem', 'warn'); return; }
+  if (!_buyEmployees.length) { toast('Adicione ao menos um funcionário', 'warn'); return; }
   const { airline, route, date, price, eventId, offerId } = _buyData;
+  const qty = _buyEmployees.length;
   const purchase = {
     id:          'p_' + Date.now(),
     eventName:   eventId ? (events.find(e => e.id === eventId)?.name || route) : route,
-    airline,
-    route,
-    date,
+    airline, route, date,
     pricePerPax: price,
     qty,
     total:       price * qty,
     boughtAt:    new Date().toISOString().split('T')[0],
     status:      'confirmed',
     offer_id:    offerId,
+    passengers:  _buyEmployees.map(e => ({ nome: e.nome, cpf: e.cpf, data_nascimento: e.data_nascimento, sexo: e.sexo, email: e.email })),
   };
   purchases.push(purchase);
   if (eventId) {
