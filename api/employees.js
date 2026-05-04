@@ -35,19 +35,32 @@ module.exports = async (req, res) => {
       rejectUnauthorized: false, // suporte a certificado self-signed da intranet
     };
 
-    const data = await new Promise((resolve, reject) => {
+    const raw = await new Promise((resolve, reject) => {
       const request = lib.request(options, (proxyRes) => {
-        let raw = '';
-        proxyRes.on('data', chunk => raw += chunk);
-        proxyRes.on('end', () => resolve(raw));
+        let body = '';
+        proxyRes.on('data', chunk => body += chunk);
+        proxyRes.on('end', () => resolve(body));
       });
       request.on('error', reject);
       request.setTimeout(10000, () => { request.destroy(); reject(new Error('Timeout')); });
       request.end();
     });
 
+    // N8N pode retornar formato interno [{ json: {...} }] — normaliza para array plano
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return res.status(500).json({ error: `N8N retornou resposta inválida: ${raw.slice(0, 100)}` });
+    }
+
+    let result = parsed;
+    if (Array.isArray(parsed) && parsed[0]?.json !== undefined) {
+      result = parsed.map(item => item.json);
+    }
+
     res.setHeader('Content-Type', 'application/json');
-    res.status(200).send(data);
+    res.status(200).json(result);
 
   } catch (err) {
     res.status(500).json({ error: err.message });
