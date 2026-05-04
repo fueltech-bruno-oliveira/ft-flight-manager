@@ -1425,15 +1425,10 @@ async function checkProxy() {
   pill.classList.remove('ok', 'err');
   document.getElementById('proxyStatus').textContent = 'Verificando…';
   try {
-    const r = await fetch('/api/duffel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'ping' }),
-      signal: AbortSignal.timeout(8000),
-    });
+    const r = await fetch('/api/flights', { signal: AbortSignal.timeout(8000) });
     const data = await r.json().catch(() => ({}));
     if (r.ok && data.status === 'ok') {
-      document.getElementById('proxyStatus').textContent = 'Duffel ✓';
+      document.getElementById('proxyStatus').textContent = 'SerpAPI ✓';
       pill.classList.add('ok');
       document.getElementById('proxyBanner').style.display = 'none';
     } else {
@@ -1855,70 +1850,37 @@ function saveDuffelSettings() {
   toast('Configurações salvas', 'ok');
 }
 
-// ─── DUFFEL API ───────────────────────────────────────────────────────────────
-function parseDuffelDuration(iso) {
-  if (!iso) return 0;
-  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
-  return parseInt(m?.[1] || 0) * 60 + parseInt(m?.[2] || 0);
-}
-
-function mapDuffelOffers(offers) {
-  return offers.map(offer => {
-    const slice    = offer.slices[0];
-    const segments = slice.segments;
-    const first    = segments[0];
-    const last     = segments[segments.length - 1];
-    const carrier  = first.operating_carrier || first.marketing_carrier || {};
-    const logo     = carrier.logo_symbol_url || carrier.logo_lockup_url || '';
-    const flightsArr = segments.map(s => ({
-      airline:           (s.operating_carrier || s.marketing_carrier || {}).name || '—',
-      flight_number:     `${(s.operating_carrier || s.marketing_carrier || {}).iata_code || ''}${s.operating_carrier_flight_number || s.marketing_carrier_flight_number || ''}`,
-      airline_logo:      logo,
-      departure_airport: { time: s.departing_at },
-      arrival_airport:   { time: s.arriving_at },
-    }));
-    const stops     = segments.length - 1;
-    const layovers  = stops > 0 ? segments.slice(0, -1).map(s => ({ name: s.destination?.iata_code || '' })) : [];
-    return {
-      price:          parseFloat(offer.total_amount),
-      offer_id:       offer.id,
-      flights:        flightsArr,
-      layovers,
-      total_duration: parseDuffelDuration(slice.duration),
-      booking_token:  null,
-    };
+// ─── SERPAPI GOOGLE FLIGHTS ───────────────────────────────────────────────────
+async function fetchSerpFlights(origin, dest, date, numPax) {
+  const params = new URLSearchParams({
+    engine:       'google_flights',
+    departure_id: origin,
+    arrival_id:   dest,
+    outbound_date: date,
+    currency:     'BRL',
+    hl:           'pt',
+    gl:           'br',
+    adults:       Math.max(1, numPax),
+    type:         '2', // só ida
+    stops:        '1', // apenas voos diretos
   });
-}
 
-async function fetchDuffelFlights(origin, dest, date, numPax) {
-  const passengers = Array.from({ length: Math.max(1, numPax) }, () => ({ type: 'adult' }));
-  const resp = await fetch('/api/duffel', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'search',
-      payload: { origin, destination: dest, date, passengers },
-    }),
-    signal: AbortSignal.timeout(25000),
-  });
+  const resp = await fetch(`/api/flights?${params}`, { signal: AbortSignal.timeout(20000) });
   const json = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(json?.errors?.[0]?.message || json?.error || `Duffel erro ${resp.status}`);
+  if (!resp.ok) throw new Error(json?.error || `SerpAPI erro ${resp.status}`);
 
-  let offers = mapDuffelOffers(json.data?.offers || []);
+  let results = [...(json.best_flights || []), ...(json.other_flights || [])];
 
-  // Filtro 1 — apenas voos diretos
-  offers = offers.filter(f => f.layovers.length === 0);
-
-  // Filtro 2 — partida a partir das 08:00 (horário local do aeroporto de origem)
-  offers = offers.filter(f => {
+  // Filtro — partida a partir das 08:00
+  results = results.filter(f => {
     const time = (f.flights[0]?.departure_airport?.time || '').slice(11, 16);
     return time >= '08:00';
   });
 
-  // Filtro 3 — menor preço primeiro
-  offers.sort((a, b) => a.price - b.price);
+  // Menor preço primeiro
+  results.sort((a, b) => (a.price || 0) - (b.price || 0));
 
-  return offers;
+  return results;
 }
 
 async function searchFlights() {
@@ -1955,7 +1917,7 @@ async function searchFlights() {
     const hotelRooms = totalRooms > 0 ? totalRooms : 1;
 
     // Busca voos via Duffel
-    const flights = await fetchDuffelFlights(origin, dest, date, totalPax);
+    const flights = await fetchSerpFlights(origin, dest, date, totalPax);
     const hotels  = []; // hotéis via link direto — sem API necessária
 
     if (!flights.length && !hotels.length) {
@@ -2289,7 +2251,7 @@ async function monitorAllEvents() {
   for (const ev of active) {
     try {
       const origin = ev.origin || 'POA';
-      const offers = await fetchDuffelFlights(origin, ev.airport, ev.startDate, 1);
+      const offers = await fetchSerpFlights(origin, ev.airport, ev.startDate, 1);
       const best   = offers.reduce((a, b) => (!a || b.price < a.price) ? b : a, null);
       if (!best?.price) continue;
 
