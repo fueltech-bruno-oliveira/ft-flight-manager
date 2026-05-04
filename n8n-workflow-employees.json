@@ -15,21 +15,30 @@
     },
     {
       "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst raw = typeof data.query === 'string' ? data.query : (data.query?.query || '');\nconst term = raw.replace(/'/g, '').trim().toUpperCase();\n\nconst sql = `SELECT TOP 20\n  RTRIM(RA_MAT)     AS matricula,\n  RTRIM(RA_NOME)    AS nome,\n  RTRIM(RA_CIC)     AS cpf,\n  CONVERT(VARCHAR(10), RA_NASC, 23) AS data_nascimento,\n  RTRIM(RA_EMAIL)   AS email,\n  RTRIM(RA_SEXO)    AS sexo,\n  RTRIM(RA_DDDCELU) AS ddd,\n  RTRIM(RA_NUMCELU) AS celular\nFROM SRA010\nWHERE D_E_L_E_T_ = ' '\n  AND RA_DEMISSA  = '  '\n  AND RA_NOME LIKE '%${term}%'\nORDER BY RA_NOME`;\n\nreturn [{ json: { sqlQuery: sql } }];"
+      },
+      "name": "Code — Prepara SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT TOP 20\n  RTRIM(RA_MAT)   AS matricula,\n  RTRIM(RA_NOME)  AS nome,\n  RTRIM(RA_CIC)   AS cpf,\n  CONVERT(VARCHAR(10), RA_NASC, 23) AS data_nascimento,\n  RTRIM(RA_EMAIL) AS email,\n  RTRIM(RA_TEL)   AS telefone,\n  RTRIM(RA_SEXO)  AS sexo\nFROM SRA010\nWHERE D_E_L_E_T_ = ' '\n  AND RA_DEMISSA  = '  '\n  AND RA_NOME LIKE '%' + '{{ $json.query }}' + '%'\nORDER BY RA_NOME"
+        "query": "={{ $json.sqlQuery }}"
       },
       "name": "SQL Server — Busca SRA",
       "type": "n8n-nodes-base.microsoftSql",
       "typeVersion": 1,
-      "position": [480, 300]
+      "position": [680, 300]
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($input.all().map(i => i.json)) }}",
+        "respondWith": "allIncomingItems",
         "options": {
           "responseHeaders": {
             "entries": [
+              { "name": "Content-Type", "value": "application/json" },
               { "name": "Access-Control-Allow-Origin", "value": "*" }
             ]
           }
@@ -38,11 +47,14 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [720, 300]
+      "position": [900, 300]
     }
   ],
   "connections": {
     "Webhook": {
+      "main": [[{ "node": "Code — Prepara SQL", "type": "main", "index": 0 }]]
+    },
+    "Code — Prepara SQL": {
       "main": [[{ "node": "SQL Server — Busca SRA", "type": "main", "index": 0 }]]
     },
     "SQL Server — Busca SRA": {

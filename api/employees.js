@@ -46,6 +46,11 @@ module.exports = async (req, res) => {
       request.end();
     });
 
+    // Body vazio = 0 resultados (N8N não envia [] quando SQL retorna 0 linhas)
+    if (!raw || raw.trim() === '') {
+      return res.status(200).json([]);
+    }
+
     // N8N pode retornar formato interno [{ json: {...} }] — normaliza para array plano
     let parsed;
     try {
