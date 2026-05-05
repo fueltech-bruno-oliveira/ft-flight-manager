@@ -1280,6 +1280,11 @@ window.onload = async () => {
   populateEventSelect();
   renderAlerts();
   updateBadges();
+
+  // Deep link: abre aba correta se URL contiver #calendario, #busca, #alertas ou #historico
+  const hash = (window.location.hash || '').replace('#', '');
+  if (TAB_KEYS.includes(hash)) switchTab(hash);
+
   startAutoRefresh();
   await checkProxy();
 };
@@ -1461,6 +1466,9 @@ function switchTab(tab) {
   activeBtn.classList.add('active');
   const badge = activeBtn.querySelector('.badge');
   if (badge && !badge.classList.contains('urgent')) badge.classList.add('active-tab');
+
+  // Atualiza o hash da URL para permitir deep links e bookmarks
+  history.replaceState(null, '', '#' + tab);
 
   if (tab === 'alertas')   renderAlerts();
   if (tab === 'historico') renderHistorico();
@@ -2338,6 +2346,14 @@ function startAutoRefresh() {
   // Executa imediatamente e depois a cada 6 horas
   monitorAllEvents();
   autoTimer = setInterval(monitorAllEvents, 6 * 60 * 60 * 1000);
+
+  // Atualiza contador de dias a cada hora
+  setInterval(() => { renderCalendar(); renderMonthCalendar(); updateBadges(); }, 60 * 60 * 1000);
+
+  // Atualiza imediatamente ao voltar para a aba (ex: abrir no outro dia)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { renderCalendar(); renderMonthCalendar(); updateBadges(); }
+  });
 }
 
 // ─── HISTÓRICO DE PREÇOS ──────────────────────────────────────────────────────
