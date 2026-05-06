@@ -1875,7 +1875,7 @@ async function fetchSerpFlights(origin, dest, date, numPax, noCache = false) {
     flights:        f.flights || [],
     layovers:       f.layovers || [],
     total_duration: f.total_duration || 0,
-    booking_token:  null,
+    booking_token:  f.booking_token || null,
     offer_id:       null,
   }));
 
@@ -2032,16 +2032,24 @@ function renderSearchResults(results, hotels, target, origin, dest, date, checko
       </div>
 
       <div style="text-align:right;min-width:120px;">
-        <div style="font-size:22px;font-weight:900;color:${cheap?'var(--green)':'var(--text)'};">${price ? fmtBRL(price) : '—'}</div>
-        <div style="font-size:11px;color:var(--muted);">por pessoa</div>
+        <div style="font-size:22px;font-weight:900;color:${cheap?'var(--green)':'var(--text)'};">${price ? fmtBRL(price) : '<span style="font-size:13px;color:var(--muted);">Ver no site</span>'}</div>
+        <div style="font-size:11px;color:var(--muted);">${price ? 'por pessoa' : ''}</div>
         ${totalPax > 0 && price ? `<div style="font-size:12px;font-weight:700;color:var(--primary);margin-top:3px;">${fmtBRL(price * totalPax)} total (${totalPax} pax)</div>` : ''}
         ${target && price ? `<div style="font-size:11px;font-weight:600;color:${cheap?'var(--green)':'var(--muted)'};">${cheap ? `↓ ${fmtBRL(target-price)} abaixo` : `↑ ${fmtBRL(price-target)} acima`}</div>` : ''}
       </div>
 
       <div style="display:flex;flex-direction:column;gap:6px;min-width:130px;">
-        ${price ? `<a class="btn btn-success btn-sm" href="https://www.google.com/flights#flt=${origin}.${dest}.${depDate};c:BRL;e:1;sd:1;t:f" target="_blank" rel="noopener">
-            <i data-lucide="shopping-cart"></i> Comprar
-          </a>` : ''}
+        ${price
+          ? `<a class="btn btn-success btn-sm" href="https://www.google.com/flights#flt=${origin}.${dest}.${depDate};c:BRL;e:1;sd:1;t:f" target="_blank" rel="noopener">
+              <i data-lucide="shopping-cart"></i> Comprar
+             </a>`
+          : bookingUrl
+            ? `<a class="btn btn-success btn-sm" href="${bookingUrl}" target="_blank" rel="noopener">
+                <i data-lucide="external-link"></i> Ver preço
+               </a>`
+            : `<a class="btn btn-success btn-sm" href="https://www.voeazul.com.br/" target="_blank" rel="noopener">
+                <i data-lucide="external-link"></i> Ver preço
+               </a>`}
         ${price ? `<button class="btn btn-ghost btn-sm"
             onclick="createAlert('${airline.replace(/'/g,'`')}','${dest}','${depDate}','${price}','${target||price}','${eventId||''}')">
             <i data-lucide="bell-plus"></i> Criar Alerta
