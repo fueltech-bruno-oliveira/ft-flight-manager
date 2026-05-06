@@ -1851,7 +1851,7 @@ function saveSettings() {
 }
 
 // ─── SERP API ─────────────────────────────────────────────────────────────────
-async function fetchSerpFlights(origin, dest, date, numPax, noCache = false) {
+async function fetchSerpFlights(origin, dest, date, numPax, noCache = false, returnDate = null) {
   const params = new URLSearchParams({
     engine:        'google_flights',
     departure_id:  origin,
@@ -1860,8 +1860,9 @@ async function fetchSerpFlights(origin, dest, date, numPax, noCache = false) {
     currency:      'BRL',
     hl:            'pt',
     gl:            'br',
-    type:          '2',
+    type:          returnDate ? '1' : '2',
   });
+  if (returnDate) params.set('return_date', returnDate);
   if (noCache) params.set('no_cache', 'true');
   const resp = await fetch(`/api/flights?${params}`, {
     signal: AbortSignal.timeout(25000),
@@ -1871,12 +1872,14 @@ async function fetchSerpFlights(origin, dest, date, numPax, noCache = false) {
 
   const all = [...(json.best_flights || []), ...(json.other_flights || [])];
   const mapped = all.map(f => ({
-    price:          f.price || null,
+    // divide por 2 quando ida e volta para mostrar estimativa por trecho
+    price:          f.price ? (returnDate ? Math.round(f.price / 2) : f.price) : null,
     flights:        f.flights || [],
     layovers:       f.layovers || [],
     total_duration: f.total_duration || 0,
     booking_token:  f.booking_token || null,
     offer_id:       null,
+    roundTrip:      !!returnDate,
   }));
 
   const priceSort = (a, b) => {
@@ -1886,27 +1889,33 @@ async function fetchSerpFlights(origin, dest, date, numPax, noCache = false) {
     return 0;
   };
 
-  // Filtro 1: diretos com partida >= 08:00 (preferência máxima)
-  const directAfter8 = mapped.filter(f => {
-    if (f.layovers.length > 0) return false;
-    const time = (f.flights[0]?.departure_airport?.time || '').slice(11, 16);
-    return time >= '08:00';
-  });
-  if (directAfter8.length > 0) {
-    directAfter8.sort(priceSort);
-    return directAfter8;
-  }
+  // Voos diretos com partida >= 08:00
+  const directAfter8 = mapped
+    .filter(f => f.layovers.length === 0 && (f.flights[0]?.departure_airport?.time || '').slice(11,16) >= '08:00')
+    .sort(priceSort);
 
-  // Filtro 2: diretos qualquer horário
-  const direct = mapped.filter(f => f.layovers.length === 0);
-  if (direct.length > 0) {
-    direct.sort(priceSort);
-    return direct;
-  }
+  // Se não houver diretos >= 08h, usa diretos de qualquer horário
+  const allDirect = (directAfter8.length > 0
+    ? directAfter8
+    : mapped.filter(f => f.layovers.length === 0).sort(priceSort));
 
-  // Filtro 3: todos os voos (fallback)
-  mapped.sort(priceSort);
-  return mapped;
+  // Companhias já representadas nos voos diretos
+  const directAirlines = new Set(allDirect.map(f => f.flights[0]?.airline).filter(Boolean));
+
+  // Complementa com até 2 voos com escala por companhia não representada nos diretos
+  const nonDirectByAirline = new Map();
+  for (const f of mapped.filter(f => f.layovers.length > 0).sort(priceSort)) {
+    const airline = f.flights[0]?.airline;
+    if (!airline || directAirlines.has(airline)) continue;
+    const bucket = nonDirectByAirline.get(airline) || [];
+    if (bucket.length < 2) { bucket.push(f); nonDirectByAirline.set(airline, bucket); }
+  }
+  const nonDirect = [...nonDirectByAirline.values()].flat().sort(priceSort);
+
+  // Diretos primeiro, depois os melhores com escala de outras companhias
+  return allDirect.length > 0
+    ? [...allDirect, ...nonDirect]
+    : nonDirect.length > 0 ? nonDirect : mapped.sort(priceSort);
 }
 
 async function searchFlights() {
@@ -1943,7 +1952,8 @@ async function searchFlights() {
     const hotelRooms = totalRooms > 0 ? totalRooms : 1;
 
     // Busca voos via SerpAPI (Google Flights) — no_cache para dados frescos na busca manual
-    const flights = await fetchSerpFlights(origin, dest, date, totalPax, true);
+    const retDateParam = retDate && retDate > date ? retDate : null;
+    const flights = await fetchSerpFlights(origin, dest, date, totalPax, true, retDateParam);
     const hotels  = []; // hotéis via link direto — sem API necessária
 
     if (!flights.length && !hotels.length) {
@@ -2033,7 +2043,7 @@ function renderSearchResults(results, hotels, target, origin, dest, date, checko
 
       <div style="text-align:right;min-width:120px;">
         <div style="font-size:22px;font-weight:900;color:${cheap?'var(--green)':'var(--text)'};">${price ? fmtBRL(price) : '<span style="font-size:13px;color:var(--muted);">Ver no site</span>'}</div>
-        <div style="font-size:11px;color:var(--muted);">${price ? 'por pessoa' : ''}</div>
+        <div style="font-size:11px;color:var(--muted);">${price ? (f.roundTrip ? 'est. por trecho' : 'por pessoa') : ''}</div>
         ${totalPax > 0 && price ? `<div style="font-size:12px;font-weight:700;color:var(--primary);margin-top:3px;">${fmtBRL(price * totalPax)} total (${totalPax} pax)</div>` : ''}
         ${target && price ? `<div style="font-size:11px;font-weight:600;color:${cheap?'var(--green)':'var(--muted)'};">${cheap ? `↓ ${fmtBRL(target-price)} abaixo` : `↑ ${fmtBRL(price-target)} acima`}</div>` : ''}
       </div>
@@ -2285,7 +2295,7 @@ async function monitorAllEvents() {
   for (const ev of active) {
     try {
       const origin = ev.origin || 'POA';
-      const offers = await fetchSerpFlights(origin, ev.airport, ev.startDate, 1);
+      const offers = await fetchSerpFlights(origin, ev.airport, ev.startDate, 1, false, ev.endDate || null);
       const best   = offers.reduce((a, b) => (!a || b.price < a.price) ? b : a, null);
       if (!best?.price) continue;
 
