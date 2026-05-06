@@ -1861,6 +1861,7 @@ async function fetchSerpFlights(origin, dest, date, numPax) {
     hl:            'pt',
     gl:            'br',
     type:          '2',
+    no_cache:      'true',
   });
   const resp = await fetch(`/api/flights?${params}`, {
     signal: AbortSignal.timeout(25000),
