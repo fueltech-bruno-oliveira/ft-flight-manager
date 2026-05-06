@@ -1870,16 +1870,21 @@ async function fetchSerpFlights(origin, dest, date, numPax, noCache = false) {
   if (!resp.ok) throw new Error(json?.error || `SerpAPI erro ${resp.status}`);
 
   const all = [...(json.best_flights || []), ...(json.other_flights || [])];
-  const mapped = all
-    .filter(f => f.price > 0)
-    .map(f => ({
-      price:          f.price,
-      flights:        f.flights || [],
-      layovers:       f.layovers || [],
-      total_duration: f.total_duration || 0,
-      booking_token:  null,
-      offer_id:       null,
-    }));
+  const mapped = all.map(f => ({
+    price:          f.price || null,
+    flights:        f.flights || [],
+    layovers:       f.layovers || [],
+    total_duration: f.total_duration || 0,
+    booking_token:  null,
+    offer_id:       null,
+  }));
+
+  const priceSort = (a, b) => {
+    if (a.price && b.price) return a.price - b.price;
+    if (a.price) return -1;
+    if (b.price) return 1;
+    return 0;
+  };
 
   // Filtro 1: diretos com partida >= 08:00 (preferência máxima)
   const directAfter8 = mapped.filter(f => {
@@ -1888,19 +1893,19 @@ async function fetchSerpFlights(origin, dest, date, numPax, noCache = false) {
     return time >= '08:00';
   });
   if (directAfter8.length > 0) {
-    directAfter8.sort((a, b) => a.price - b.price);
+    directAfter8.sort(priceSort);
     return directAfter8;
   }
 
   // Filtro 2: diretos qualquer horário
   const direct = mapped.filter(f => f.layovers.length === 0);
   if (direct.length > 0) {
-    direct.sort((a, b) => a.price - b.price);
+    direct.sort(priceSort);
     return direct;
   }
 
-  // Filtro 3: qualquer voo com preço (fallback)
-  mapped.sort((a, b) => a.price - b.price);
+  // Filtro 3: todos os voos (fallback)
+  mapped.sort(priceSort);
   return mapped;
 }
 
