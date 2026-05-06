@@ -1851,7 +1851,7 @@ function saveSettings() {
 }
 
 // ─── SERP API ─────────────────────────────────────────────────────────────────
-async function fetchSerpFlights(origin, dest, date, numPax) {
+async function fetchSerpFlights(origin, dest, date, numPax, noCache = false) {
   const params = new URLSearchParams({
     engine:        'google_flights',
     departure_id:  origin,
@@ -1861,8 +1861,8 @@ async function fetchSerpFlights(origin, dest, date, numPax) {
     hl:            'pt',
     gl:            'br',
     type:          '2',
-    no_cache:      'true',
   });
+  if (noCache) params.set('no_cache', 'true');
   const resp = await fetch(`/api/flights?${params}`, {
     signal: AbortSignal.timeout(25000),
   });
@@ -1937,8 +1937,8 @@ async function searchFlights() {
     const totalRooms = Math.ceil(pax.men / 2) + Math.ceil(pax.women / 2);
     const hotelRooms = totalRooms > 0 ? totalRooms : 1;
 
-    // Busca voos via SerpAPI (Google Flights)
-    const flights = await fetchSerpFlights(origin, dest, date, totalPax);
+    // Busca voos via SerpAPI (Google Flights) — no_cache para dados frescos na busca manual
+    const flights = await fetchSerpFlights(origin, dest, date, totalPax, true);
     const hotels  = []; // hotéis via link direto — sem API necessária
 
     if (!flights.length && !hotels.length) {
