@@ -8,7 +8,7 @@ const https = require('https');
 const http  = require('http');
 const { URL } = require('url');
 
-const N8N_URL = process.env.N8N_ALERT_URL || 'https://intranet.fueltech.com.br:5678/webhook-test/ft-price-alert';
+const N8N_URL = process.env.N8N_ALERT_URL || 'https://intranet.fueltech.com.br:5678/webhook/ft-price-alert';
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin',  '*');
@@ -33,14 +33,12 @@ module.exports = async (req, res) => {
 
   return new Promise((resolve) => {
     const req2 = lib.request(options, (r) => {
-      res.status(r.statusCode || 200).json({ ok: true });
+      r.resume(); // descarta o body da resposta
+      res.status(200).json({ ok: true });
       resolve();
     });
-    req2.on('error', (err) => {
-      res.status(502).json({ error: err.message });
-      resolve();
-    });
-    req2.setTimeout(10000, () => { req2.destroy(); res.status(504).json({ error: 'timeout' }); resolve(); });
+    req2.on('error', () => { res.status(200).json({ ok: false }); resolve(); });
+    req2.setTimeout(10000, () => { req2.destroy(); res.status(200).json({ ok: false }); resolve(); });
     req2.write(body);
     req2.end();
   });
