@@ -1851,25 +1851,20 @@ function saveSettings() {
 }
 
 // ─── SERP API ─────────────────────────────────────────────────────────────────
-async function fetchSerpFlights(origin, dest, date, numPax, noCache = false, returnDate = null) {
+async function fetchSerpRaw(origin, dest, date, noCache, returnDate, includeAirlines) {
   const params = new URLSearchParams({
-    engine:        'google_flights',
-    departure_id:  origin,
-    arrival_id:    dest,
-    outbound_date: date,
-    currency:      'BRL',
-    hl:            'pt',
-    gl:            'br',
-    type:          returnDate ? '1' : '2',
+    engine: 'google_flights', departure_id: origin, arrival_id: dest,
+    outbound_date: date, currency: 'BRL', hl: 'pt', gl: 'br',
+    type: returnDate ? '1' : '2',
   });
-  if (returnDate) params.set('return_date', returnDate);
-  if (noCache) params.set('no_cache', 'true');
+  if (returnDate)       params.set('return_date',      returnDate);
+  if (noCache)          params.set('no_cache',          'true');
+  if (includeAirlines)  params.set('include_airlines',  includeAirlines);
   const resp = await fetch(`/api/flights?${params}`, { signal: AbortSignal.timeout(25000) });
   const json = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(json?.error || `SerpAPI erro ${resp.status}`);
-
   const all = [...(json.best_flights || []), ...(json.other_flights || [])];
-  const mapped = all.map(f => ({
+  return all.map(f => ({
     price:          f.price ? (returnDate ? Math.round(f.price / 2) : f.price) : null,
     flights:        f.flights || [],
     layovers:       f.layovers || [],
@@ -1878,6 +1873,43 @@ async function fetchSerpFlights(origin, dest, date, numPax, noCache = false, ret
     offer_id:       null,
     roundTrip:      !!returnDate,
   }));
+}
+
+async function fetchSerpFlights(origin, dest, date, numPax, noCache = false, returnDate = null) {
+  // Busca normal + busca específica Azul em paralelo
+  const [mainRes, azulRes] = await Promise.allSettled([
+    fetchSerpRaw(origin, dest, date, noCache, returnDate, null),
+    fetchSerpRaw(origin, dest, date, noCache, returnDate, 'AD'),
+  ]);
+
+  const main = mainRes.status === 'fulfilled' ? mainRes.value : [];
+  const azul = azulRes.status === 'fulfilled' ? azulRes.value : [];
+  if (mainRes.status === 'rejected') console.warn('[SerpAPI] busca geral:', mainRes.reason?.message);
+  if (azulRes.status === 'rejected') console.warn('[SerpAPI] busca Azul:', azulRes.reason?.message);
+
+  // Preços da Azul da busca específica indexed por horário de partida
+  const azulPrices = new Map(
+    azul
+      .filter(f => f.price && f.flights[0]?.airline === 'Azul')
+      .map(f => [f.flights[0]?.departure_airport?.time?.slice(11,16), f.price])
+  );
+
+  // Injeta preços da Azul nos voos sem preço da busca principal
+  const merged = main.map(f => {
+    if (f.price || f.flights[0]?.airline !== 'Azul') return f;
+    const depTime = f.flights[0]?.departure_airport?.time?.slice(11,16);
+    const azulPrice = depTime ? azulPrices.get(depTime) : null;
+    return azulPrice ? { ...f, price: azulPrice } : f;
+  });
+
+  // Adiciona voos da Azul que não estavam na busca principal
+  const mainTimes = new Set(main.map(f => f.flights[0]?.departure_airport?.time?.slice(11,16)));
+  const azulExtra = azul.filter(f =>
+    f.flights[0]?.airline === 'Azul' &&
+    !mainTimes.has(f.flights[0]?.departure_airport?.time?.slice(11,16))
+  );
+
+  const mapped = [...merged, ...azulExtra];
 
   const priceSort = (a, b) => {
     if (a.price && b.price) return a.price - b.price;
