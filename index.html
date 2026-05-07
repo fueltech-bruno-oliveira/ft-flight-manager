@@ -1875,41 +1875,67 @@ async function fetchSerpRaw(origin, dest, date, noCache, returnDate, includeAirl
   }));
 }
 
+async function fetchTravelpayoutsAzulPrice(origin, dest, date) {
+  const params = new URLSearchParams({ origin, destination: dest, depart_date: date });
+  const resp = await fetch(`/api/travelpayouts?${params}`, { signal: AbortSignal.timeout(15000) });
+  const json = await resp.json().catch(() => ({}));
+  if (!json.success) return null;
+  const azulData = json.data?.['AD'];
+  return azulData?.price || null;
+}
+
 async function fetchSerpFlights(origin, dest, date, numPax, noCache = false, returnDate = null) {
-  // Busca normal + busca específica Azul em paralelo
-  const [mainRes, azulRes] = await Promise.allSettled([
+  // Busca SerpAPI geral + SerpAPI filtrado Azul + Travelpayouts em paralelo
+  const [mainRes, azulSerpRes, azulTpRes] = await Promise.allSettled([
     fetchSerpRaw(origin, dest, date, noCache, returnDate, null),
     fetchSerpRaw(origin, dest, date, noCache, returnDate, 'AD'),
+    fetchTravelpayoutsAzulPrice(origin, dest, date),
   ]);
 
-  const main = mainRes.status === 'fulfilled' ? mainRes.value : [];
-  const azul = azulRes.status === 'fulfilled' ? azulRes.value : [];
-  if (mainRes.status === 'rejected') console.warn('[SerpAPI] busca geral:', mainRes.reason?.message);
-  if (azulRes.status === 'rejected') console.warn('[SerpAPI] busca Azul:', azulRes.reason?.message);
+  const main      = mainRes.status      === 'fulfilled' ? mainRes.value      : [];
+  const azulSerp  = azulSerpRes.status  === 'fulfilled' ? azulSerpRes.value  : [];
+  const tpPrice   = azulTpRes.status    === 'fulfilled' ? azulTpRes.value    : null;
+  if (mainRes.status     === 'rejected') console.warn('[SerpAPI] busca geral:', mainRes.reason?.message);
+  if (azulSerpRes.status === 'rejected') console.warn('[SerpAPI] busca Azul:', azulSerpRes.reason?.message);
+  if (azulTpRes.status   === 'rejected') console.warn('[Travelpayouts]:', azulTpRes.reason?.message);
 
-  // Preços da Azul da busca específica indexed por horário de partida
-  const azulPrices = new Map(
-    azul
+  // Preços da Azul do SerpAPI filtrado, indexados por horário de partida
+  const azulSerpPrices = new Map(
+    azulSerp
       .filter(f => f.price && f.flights[0]?.airline === 'Azul')
       .map(f => [f.flights[0]?.departure_airport?.time?.slice(11,16), f.price])
   );
 
-  // Injeta preços da Azul nos voos sem preço da busca principal
+  // Injeta preço nos voos Azul sem preço: SerpAPI filtrado primeiro, Travelpayouts como fallback
   const merged = main.map(f => {
     if (f.price || f.flights[0]?.airline !== 'Azul') return f;
-    const depTime = f.flights[0]?.departure_airport?.time?.slice(11,16);
-    const azulPrice = depTime ? azulPrices.get(depTime) : null;
-    return azulPrice ? { ...f, price: azulPrice } : f;
+    const depTime  = f.flights[0]?.departure_airport?.time?.slice(11,16);
+    const price    = (depTime && azulSerpPrices.get(depTime)) || tpPrice || null;
+    return price ? { ...f, price } : f;
   });
 
-  // Adiciona voos da Azul que não estavam na busca principal
+  // Voos Azul do SerpAPI filtrado que não estavam na busca geral
   const mainTimes = new Set(main.map(f => f.flights[0]?.departure_airport?.time?.slice(11,16)));
-  const azulExtra = azul.filter(f =>
+  const azulExtra = azulSerp.filter(f =>
     f.flights[0]?.airline === 'Azul' &&
     !mainTimes.has(f.flights[0]?.departure_airport?.time?.slice(11,16))
   );
 
-  const mapped = [...merged, ...azulExtra];
+  // Se SerpAPI não trouxe nenhum voo Azul mas Travelpayouts tem preço, cria entrada mínima
+  const hasAzul = merged.some(f => f.flights[0]?.airline === 'Azul') || azulExtra.length > 0;
+  const tpEntry = (!hasAzul && tpPrice) ? [{
+    price:          tpPrice,
+    flights:        [{ airline: 'Azul', airline_logo: 'https://www.gstatic.com/flights/airline_logos/70px/AD.png',
+                       flight_number: '', departure_airport: { id: origin, name: origin, time: '' },
+                       arrival_airport: { id: dest, name: dest, time: '' }, duration: 0 }],
+    layovers:       [],
+    total_duration: 0,
+    booking_token:  null,
+    offer_id:       null,
+    roundTrip:      false,
+  }] : [];
+
+  const mapped = [...merged, ...azulExtra, ...tpEntry];
 
   const priceSort = (a, b) => {
     if (a.price && b.price) return a.price - b.price;
