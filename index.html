@@ -1876,12 +1876,16 @@ async function fetchSerpRaw(origin, dest, date, noCache, returnDate, includeAirl
 }
 
 async function fetchTravelpayoutsAzulPrice(origin, dest, date) {
-  const params = new URLSearchParams({ origin, destination: dest, depart_date: date });
+  const yearMonth = date.slice(0, 7); // "2026-07-02" → "2026-07"
+  const params = new URLSearchParams({ origin, destination: dest, depart_date: yearMonth });
   const resp = await fetch(`/api/travelpayouts?${params}`, { signal: AbortSignal.timeout(15000) });
   const json = await resp.json().catch(() => ({}));
-  if (!json.success) return null;
-  const azulData = json.data?.['AD'];
-  return azulData?.price || null;
+  if (!json.success || !json.data) return null;
+  // A chave do destino pode vir como grupo (ex: "SAO" para VCP) — pega a primeira
+  const destKey = Object.keys(json.data)[0];
+  if (!destKey) return null;
+  const entry = Object.values(json.data[destKey]).find(f => f.airline === 'AD');
+  return entry?.price || null;
 }
 
 async function fetchSerpFlights(origin, dest, date, numPax, noCache = false, returnDate = null) {
